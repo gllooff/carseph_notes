@@ -1,0 +1,14 @@
+services:
+  notes:
+    build: .
+    ports:
+      - "8085:8080"   # host 8080 may be occupied by other local services
+    environment:
+      LISTEN_ADDR: ":8080"
+      DATA_DIR: "/data"
+      RP_ID: "localhost"
+      RP_NAME: "Carseph Notes"
+      ORIGIN: "http://localhost:8085"
+      DEV: "true"            # plain-HTTP localhost: non-Secure cookies, http origin allowed
+    volumes:
+      - ./data:/data

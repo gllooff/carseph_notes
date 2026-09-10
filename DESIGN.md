@@ -167,8 +167,8 @@ All under same origin. JSON bodies; session cookie for auth. All list/get/mutate
 
 | Method & path | Purpose |
 |---|---|
-| `POST /api/auth/register/begin` | body `{username, invite_code}`; one-time invite code required (see below); creates user, returns `PublicKeyCredentialCreationOptions` |
-| `POST /api/auth/register/finish` | verify attestation → store passkey → log in |
+| `POST /api/auth/register/begin` | body `{username, invite_code}`; one-time invite code required (see below); returns `PublicKeyCredentialCreationOptions` |
+| `POST /api/auth/register/finish` | verify attestation → create user **and first passkey in one transaction** → log in |
 | `POST /api/auth/login/begin` | body `{username?}`; empty username ⇒ discoverable-credential ("usernameless") login |
 | `POST /api/auth/login/finish` | verify assertion → update sign count → session cookie |
 | `POST /api/auth/logout` | destroy session |
@@ -177,9 +177,11 @@ All under same origin. JSON bodies; session cookie for auth. All list/get/mutate
 | `PATCH /api/passkeys/{id}` | rename |
 | `DELETE /api/passkeys/{id}` | remove (reject if it's the last one) |
 
-WebAuthn settings: `residentKey: required`, `userVerification: "preferred"` (login) / `"required"` (registration); attestation not required; no exotic transports. Challenge lifetime 60 s, single-use, stored in memory keyed by session/username. `RP ID = notes.jys-reality.win` in prod, `localhost` locally (config).
+WebAuthn settings: `residentKey: required`, `userVerification: "required"` (registration) / `"preferred"` (login); attestation `none`; challenge lifetime 60 s, single-use, in-memory, tied to the browser by a short-lived `notes_ceremony` cookie. `RP ID = notes.jys-reality.win` in prod, `localhost` locally (config).
 
-**Invite codes** (registration gate — the form is on the public internet): one-time codes stored as SHA-256 hashes in an `invite_codes` table (`code_hash`, `created_at`, `used_by`, `used_at`), marked used inside the same transaction that creates the user. New codes are minted on the server with a CLI subcommand of the same binary (`notes invite-new`, printable over SSH); no self-service code generation.
+**Ceremony wire format**: begin responses return the **inner options object** (the `{rp, user, challenge, …}` the browser's `navigator.credentials` call needs), not the `{publicKey: …}` envelope. Finish bodies wrap the browser's `PublicKeyCredential` as `{ceremony_id?, response}`; the ceremony may also be identified by its cookie. All ceremonies (register, login, add-passkey) follow this shape.
+
+**Invite codes** (registration gate — the form is on the public internet): one-time codes stored as SHA-256 hashes in an `invite_codes` table (`code_hash`, `created_at`, `used_by`, `used_at`), marked used inside the same transaction that creates the user + first passkey. New codes are minted with `notes invite-new` (printable over SSH); no self-service generation. A user row is never created until a valid attestation is verified, so an abandoned ceremony cannot leave a passkey-less account.
 
 ### Sessions
 
@@ -339,18 +341,20 @@ WebAuthn requires a secure context — satisfied by Caddy's HTTPS in prod and by
 services:
   notes:
     build: .
-    ports: ["8080:8080"]
+    ports: ["8085:8080"]     # host 8080 may be occupied by other local services
     environment:
       LISTEN_ADDR: ":8080"
       DATA_DIR: "/data"
       RP_ID: "localhost"
-      ORIGIN: "http://localhost:8080"
+      ORIGIN: "http://localhost:8085"
+      DEV: "true"            # plain-HTTP localhost; non-Secure cookies
     volumes: ["./data:/data"]
 ```
 
-* `docker compose up --build` → app at `http://localhost:8080`. `localhost` is a secure context, so **real passkeys work locally** (RP ID `localhost`).
+* `make compose-up` → app at `http://localhost:8085`. `localhost` is a secure context, so **real passkeys work locally** (RP ID `localhost`). Mint a code with `docker compose exec notes /notes invite-new`.
+* The distroless image runs as uid 65532; `make compose-up` pre-creates `./data` world-writable so SQLite can write there.
 * Since local data is throwaway, passkey/RP mismatch across environments is irrelevant — but never copy a local `data/` dir to prod (RP ID differs).
-* Smoke test (also run in CI): register → create note → upload image → restart container → session persists → everything still readable.
+* Smoke test (grows with each milestone): M1 = healthz, login page, static assets, invite minting. M2/M3 add register → create note → upload → restart container → session persists.
 
 ## 12. Testing
 

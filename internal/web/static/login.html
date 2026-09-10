@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carseph Notes — Sign in</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="auth-body">
+<main class="auth-card">
+  <h1>Carseph Notes</h1>
+  <p class="muted">Sign in with a passkey, or create a new account (invite code required).</p>
+
+  <form id="auth-form" autocomplete="off">
+    <label for="username">Username <span class="muted">(optional — leave empty to use a saved passkey)</span></label>
+    <input id="username" name="username" type="text" autocomplete="username webauthn" spellcheck="false">
+
+    <div id="invite-row" hidden>
+      <label for="invite">Invite code</label>
+      <input id="invite" name="invite" type="text" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div class="btn-row">
+      <button type="button" id="btn-signin">Sign in</button>
+      <button type="button" id="btn-register" class="secondary">Create account</button>
+    </div>
+  </form>
+
+  <p id="msg" class="msg" role="alert"></p>
+</main>
+<script type="module" src="/static/auth.js"></script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carseph Notes</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">Carseph Notes</a>
+  <nav id="mainnav" hidden>
+    <a href="/" data-nav="notes">Notes</a>
+    <a href="/files" data-nav="files">Files</a>
+    <a href="/settings" data-nav="settings">Settings</a>
+    <button id="btn-logout" class="linklike">Sign out</button>
+  </nav>
+</header>
+
+<main id="view">
+  <!-- M1: settings / account; notes & files views arrive in M2/M3 -->
+  <section id="page-notes" class="page" hidden>
+    <div class="empty-state">
+      <h2>Notes</h2>
+      <p class="muted">Note CRUD arrives in milestone M2.</p>
+    </div>
+  </section>
+
+  <section id="page-files" class="page" hidden>
+    <div class="empty-state">
+      <h2>Files</h2>
+      <p class="muted">Image &amp; PDF management arrives in milestone M3.</p>
+    </div>
+  </section>
+
+  <section id="page-settings" class="page" hidden>
+    <h2>Account</h2>
+    <p>Signed in as <strong id="whoami">…</strong></p>
+
+    <h3>Passkeys</h3>
+    <table class="pk-table" id="pk-table">
+      <thead><tr><th>Name</th><th>Created</th><th>Last used</th><th></th></tr></thead>
+      <tbody id="pk-rows"></tbody>
+    </table>
+    <div class="btn-row">
+      <button id="btn-add-passkey">Add passkey</button>
+    </div>
+  </section>
+</main>
+
+<p id="msg" class="msg" role="alert"></p>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
