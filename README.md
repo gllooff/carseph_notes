@@ -100,6 +100,25 @@ Key files: `deploy/notes.service` (hardened systemd unit),
 - Passkeys are the only credential: **losing all of them loses the account**
   (accepted trade-off; no server-side recovery).
 
+### Manual DB work
+
+If you ever run SQL against the production database (`/var/lib/notes/carseph.db`
+on the Droplet) directly:
+
+1. **Stop the service first**: `systemctl stop notes`
+2. **Enable foreign keys in your session** — the `sqlite3` CLI defaults to
+   `foreign_keys=OFF`, so `DELETE` statements silently skip cascades and leave
+   orphan rows behind:
+   ```sql
+   PRAGMA foreign_keys=ON;
+   ```
+3. Orphaned blobs are harmless: the server removes blobs whose DB rows (or
+   users) no longer exist on the next startup — but rows only get cleaned by
+   you, so delete what you intend to delete.
+
+Then `systemctl start notes` (or restart) and check
+`https://notes.jys-reality.win/api/healthz`.
+
 ## Repository layout
 
 ```
