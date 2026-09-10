@@ -60,10 +60,38 @@
     </div>
   </section>
 
-  <section id="page-files" class="page" hidden>
-    <div class="empty-state">
-      <h2>Files</h2>
-      <p class="muted">Image &amp; PDF management arrives in milestone M3.</p>
+  <section id="page-files" class="page files-page" hidden>
+    <div class="files-layout">
+      <div class="files-controls">
+        <div class="kind-tabs">
+          <button id="tab-all" class="tab active">All</button>
+          <button id="tab-image" class="tab">Images</button>
+          <button id="tab-pdf" class="tab">PDFs</button>
+        </div>
+        <label class="upload-btn">
+          Upload
+          <input id="file-input" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,.avif,.pdf" hidden>
+        </label>
+      </div>
+      <div id="file-grid" class="file-grid"></div>
+      <div id="viewer-overlay" class="viewer-overlay" hidden>
+        <div class="viewer-bar">
+          <span id="viewer-name"></span>
+          <div class="viewer-actions">
+            <button id="viewer-copy-md" class="mini" hidden>Copy ![]()</button>
+            <button id="viewer-download" class="mini">Download</button>
+            <button id="viewer-delete" class="mini danger">Delete</button>
+            <button id="viewer-close" class="mini">Close</button>
+          </div>
+        </div>
+        <img id="viewer-img" alt="">
+        <canvas id="viewer-pdf" hidden></canvas>
+        <div id="pdf-nav" hidden>
+          <button id="pdf-prev" class="mini">‹</button>
+          <span id="pdf-page-label">1 / 1</span>
+          <button id="pdf-next" class="mini">›</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -87,5 +115,6 @@
 <script src="/static/vendor/dompurify.min.js"></script>
 <script src="/static/vendor/simplewebauthn.umd.min.js"></script>
 <script type="module" src="/static/app.js"></script>
+<script type="module" src="/static/files.js"></script>
 </body>
 </html>

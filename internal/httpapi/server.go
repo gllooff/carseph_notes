@@ -67,6 +67,14 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/folders/{id}", s.auth(s.deleteFolder))
 	mux.HandleFunc("GET /api/tags", s.auth(s.listTags))
 
+	// Files: images & PDFs (authenticated).
+	mux.HandleFunc("GET /api/files", s.auth(s.listFiles))
+	mux.HandleFunc("POST /api/files", s.auth(s.uploadFile))
+	mux.HandleFunc("GET /api/files/{id}", s.auth(s.getFileMeta))
+	mux.HandleFunc("GET /api/files/{id}/raw", s.auth(s.serveFileRaw))
+	mux.HandleFunc("PATCH /api/files/{id}", s.auth(s.updateFile))
+	mux.HandleFunc("DELETE /api/files/{id}", s.auth(s.deleteFile))
+
 	// Frontend (SPA) last: everything that is not /api falls through here.
 	mux.Handle("/", web.Handler())
 

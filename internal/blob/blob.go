@@ -118,6 +118,15 @@ func (s *Store) OpenFile(userID, filename string) (*os.File, os.FileInfo, error)
 	return f, nil, nil
 }
 
+// WriteFile stores an uploaded file blob under its pre-generated filename.
+func (s *Store) WriteFile(userID, filename string, data []byte) error {
+	dir := s.fileDir(userID)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	return writeAtomic(filepath.Join(dir, filename), data)
+}
+
 // DeleteFile removes a file blob; missing files are not an error.
 func (s *Store) DeleteFile(userID, filename string) error {
 	if strings.ContainsRune(filename, '/') {
@@ -130,11 +139,11 @@ func (s *Store) DeleteFile(userID, filename string) error {
 	return err
 }
 
-// SweepOrphans removes note/file blobs whose IDs are not in the keep set.
-// Used at startup to clean files whose DB rows were lost mid-delete.
-func (s *Store) SweepOrphans(keep map[string]map[string]bool) error {
-	// keep: kind -> userID -> set of IDs
-	return filepath.WalkDir(s.root, func(path string, d os.DirEntry, err error) error {
+// SweepOrphans removes blobs under one subdir ("notes" or "files") whose
+// "userID\x00id" key is not in the keep set. Used at startup to clean blobs
+// whose DB rows were lost mid-delete.
+func (s *Store) SweepOrphans(kind string, keep map[string]bool) error {
+	return filepath.WalkDir(filepath.Join(s.root, kind), func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -146,9 +155,9 @@ func (s *Store) SweepOrphans(keep map[string]map[string]bool) error {
 		if len(parts) != 3 {
 			return nil
 		}
-		kind, userID, name := parts[0], parts[1], parts[2]
+		_, userID, name := parts[0], parts[1], parts[2]
 		id := strings.TrimSuffix(name, filepath.Ext(name))
-		if keep[kind] == nil || !keep[kind][userID+"\x00"+id] {
+		if !keep[userID+"\x00"+id] {
 			_ = os.Remove(path)
 		}
 		return nil

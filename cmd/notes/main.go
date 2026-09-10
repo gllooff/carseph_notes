@@ -85,6 +85,22 @@ func serve() {
 		slog.Error("blob store init", "err", err)
 		os.Exit(1)
 	}
+	// Sweep blobs whose DB rows vanished mid-delete (crash safety).
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		notes, files, err := st.KeepSets(ctx)
+		if err != nil {
+			slog.Warn("orphan sweep skipped", "err", err)
+			return
+		}
+		if err := blobs.SweepOrphans("notes", notes["notes"]); err != nil {
+			slog.Warn("orphan sweep", "err", err)
+		}
+		if err := blobs.SweepOrphans("files", files["files"]); err != nil {
+			slog.Warn("orphan sweep", "err", err)
+		}
+	}()
 	srv := httpapi.New(cfg, st, wa, sm, blobs)
 
 	httpServer := &http.Server{
