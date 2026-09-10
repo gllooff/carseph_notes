@@ -253,6 +253,13 @@ Tag rows left orphaned by item deletion are pruned in the same transaction. Fold
 
 No passwords exist anywhere, so there is no password DB to leak; a stolen session cookie grants access until expiry (mitigated by short-ish TTL and HttpOnly). Loss of **all** passkeys = unrecoverable account (by design; see open questions).
 
+**Multi-device access** (no server changes needed; `residentKey: required` is what enables these):
+1. *Synced passkeys* — passkeys saved to iCloud Keychain / Google Password Manager / third-party managers replicate across that ecosystem's devices automatically.
+2. *Cross-device (hybrid) login* — on a device without a passkey, the browser offers QR-code sign-in using a passkey on a nearby phone (Bluetooth proximity, works across ecosystems).
+3. *Per-device enrollment* — after such a login, Settings → Add passkey enrolls the new device's own platform authenticator.
+
+Users should enroll a second passkey (or a hardware key) as the lockout hedge, since server-side recovery does not exist.
+
 ## 7. Frontend
 
 Pages (vanilla JS ES modules, `web/static/`):
