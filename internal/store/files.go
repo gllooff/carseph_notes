@@ -182,10 +182,13 @@ func (s *Store) DeleteFile(ctx context.Context, userID, id string) error {
 
 // NoteRefsForSweep returns sets for orphan sweeping at startup:
 // kind -> "userID\x00id" -> true, matching blob.SweepOrphans' lookup shape.
+// Rows whose user no longer exists (e.g. from manual DB surgery with FKs off)
+// are treated as orphans, so the sweep self-heals.
 func (s *Store) KeepSets(ctx context.Context) (notes, files map[string]map[string]bool, err error) {
 	notes = map[string]map[string]bool{}
 	files = map[string]map[string]bool{}
-	rows, err := s.db.QueryContext(ctx, `SELECT user_id, id FROM notes`)
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT n.user_id, n.id FROM notes n JOIN users u ON u.id = n.user_id`)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -203,7 +206,8 @@ func (s *Store) KeepSets(ctx context.Context) (notes, files map[string]map[strin
 	if err := rows.Err(); err != nil {
 		return nil, nil, err
 	}
-	rows2, err := s.db.QueryContext(ctx, `SELECT user_id, id FROM files`)
+	rows2, err := s.db.QueryContext(ctx,
+		`SELECT f.user_id, f.id FROM files f JOIN users u ON u.id = f.user_id`)
 	if err != nil {
 		return nil, nil, err
 	}
