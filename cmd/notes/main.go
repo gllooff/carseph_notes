@@ -153,7 +153,7 @@ func serve() {
 
 // inviteNew mints an invite code. Usage: notes invite-new
 func inviteNew() {
-	cfg, err := config.Load()
+	cfg, err := config.LoadForCLI()
 	if err != nil {
 		slog.Error("config", "err", err)
 		os.Exit(1)

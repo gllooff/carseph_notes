@@ -243,7 +243,7 @@ Tag rows left orphaned by item deletion are pruned in the same transaction. Fold
 | XSS | DOMPurify-sanitized markdown; no inline JS; strict CSP (§ below) |
 | CSRF | `SameSite=Lax` cookie + `Origin` header must match host on all mutating requests + JSON content-type requirement |
 | Session theft | HttpOnly + Secure cookies; token hashed at rest; expiry + sliding window |
-| Credential stuffing / probing | Per-IP token-bucket rate limit on `/api/auth/*`; generic error messages |
+| Credential stuffing / probing | Per-IP rate limit (30/min) on `/api/auth/*` with `Retry-After` on 429; generic error messages |
 | Path traversal | Server-generated IDs only; `filepath` joined from constants; tests with `../` payloads |
 | Malicious uploads | See §5 |
 | Clickjacking | `X-Frame-Options: DENY`, `frame-ancestors 'none'` |
@@ -322,10 +322,11 @@ Target host facts (verified): Debian 13, 1 vCPU / 1 GB RAM, Caddy 2.11.4 already
 
 1. **Build**: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" ./cmd/notes` (pure-Go SQLite makes this possible). Single binary, assets embedded.
 2. **Install**:
-   * `useradd --system --home /var/lib/notes notes`
+   * `useradd --system --user-group --home-dir /var/lib/notes notes`
    * binary → `/usr/local/bin/notes`; config → `/etc/notes/notes.env` (`root:notes 0640`)
    * data → `/var/lib/notes` (created by systemd `StateDirectory=notes`)
-   * mint first invite code: `sudo -u notes /usr/local/bin/notes invite-new`
+   * mint an invite code: `sudo -u notes env DATA_DIR=/var/lib/notes /usr/local/bin/notes invite-new`
+     (offline subcommand; needs only `DATA_DIR`, validated leniently)
 3. **systemd** (`deploy/notes.service`): `Restart=on-failure`, `ExecStart=/usr/local/bin/notes`, plus hardening: `DynamicUser=no`, `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, `StateDirectory=notes`, `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX`.
 4. **Caddy**: append `deploy/Caddyfile.notes`:
 

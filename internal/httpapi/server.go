@@ -78,7 +78,7 @@ func (s *Server) Routes() http.Handler {
 	// Frontend (SPA) last: everything that is not /api falls through here.
 	mux.Handle("/", web.Handler())
 
-	return logMiddleware(secureHeaders(s.checkOrigin(mux)))
+	return logMiddleware(secureHeaders(s.checkOrigin(s.rateLimit(mux))))
 }
 
 // slogWarn logs a warning without failing requests.

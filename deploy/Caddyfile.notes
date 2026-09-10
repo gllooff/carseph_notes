@@ -1,0 +1,9 @@
+# deploy/Caddyfile.notes -- site block for the shared Droplet Caddy.
+# Append to /etc/caddy/Caddyfile and run: systemctl reload caddy
+# Caddy terminates TLS (Let's Encrypt) and proxies to the notes backend.
+# The DNS A record for notes.jys-reality.win must point at the Droplet and be
+# DNS-only (grey cloud) so the HTTP-01 challenge can be solved.
+
+notes.jys-reality.win {
+	reverse_proxy 127.0.0.1:8084
+}

@@ -1,0 +1,36 @@
+# deploy/notes.service -- systemd unit for the Carseph Notes server.
+# Install on the Droplet at /etc/systemd/system/notes.service, then:
+#   systemctl daemon-reload && systemctl enable --now notes
+[Unit]
+Description=Carseph Notes server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=notes
+Group=notes
+EnvironmentFile=/etc/notes/notes.env
+ExecStart=/usr/local/bin/notes serve
+Restart=on-failure
+RestartSec=3
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+StateDirectory=notes
+ReadWritePaths=
+
+[Install]
+WantedBy=multi-user.target

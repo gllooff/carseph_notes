@@ -70,6 +70,22 @@ func Load() (*Config, error) {
 // MaxNoteBytes is the per-note body limit in bytes (1 MiB).
 func (c *Config) MaxNoteBytes() int { return 1 << 20 }
 
+// LoadForCLI returns a minimal config for offline subcommands (invite-new):
+// only DATA_DIR matters; web-facing values are not validated.
+func LoadForCLI() (*Config, error) {
+	c := &Config{
+		ListenAddr:  ":8080",
+		DataDir:     env("DATA_DIR", "./data"),
+		RPID:        "localhost",
+		RPName:      "Carseph Notes",
+		Origin:      "http://localhost:8080",
+		SessionTTL:  720 * time.Hour,
+		MaxUploadMB: 25,
+		Dev:         true,
+	}
+	return c, nil
+}
+
 func env(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

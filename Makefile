@@ -38,5 +38,9 @@ build-prod:
 # Cross-compile, ship, restart. First-time setup: see DESIGN.md §10.
 deploy: build-prod
 	scp $(BIN) $(HOST):/usr/local/bin/notes.new
-	ssh $(HOST) 'mv /usr/local/bin/notes.new /usr/local/bin/notes && systemctl restart notes && systemctl is-active notes'
+	ssh $(HOST) 'mv /usr/local/bin/notes.new /usr/local/bin/notes && chmod 0755 /usr/local/bin/notes && systemctl restart notes && systemctl is-active notes'
 	curl -fsS https://notes.jys-reality.win/api/healthz
+
+# Mint an invite code on the server (DATA_DIR matches systemd StateDirectory).
+invite-prod:
+	ssh $(HOST) 'sudo -u notes env DATA_DIR=/var/lib/notes /usr/local/bin/notes invite-new'
