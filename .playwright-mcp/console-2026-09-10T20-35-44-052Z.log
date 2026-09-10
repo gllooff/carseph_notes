@@ -1,0 +1,2 @@
+[      30ms] TypeError: Cannot destructure property 'startAuthentication' of 'window.SimpleWebAuthnBrowser' as it is undefined.
+    at http://localhost:8085/static/auth.js:5:9

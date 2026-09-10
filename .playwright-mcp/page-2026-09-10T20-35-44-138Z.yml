@@ -1,0 +1,9 @@
+- main [ref=e2]:
+  - heading "Carseph Notes" [level=1] [ref=e3]
+  - paragraph [ref=e4]: Sign in with a passkey, or create a new account (invite code required).
+  - generic [ref=e5]:
+    - generic [ref=e6]: Username (optional — leave empty to use a saved passkey)
+    - textbox "Username (optional — leave empty to use a saved passkey)" [ref=e7]
+    - generic [ref=e8]:
+      - button "Sign in" [ref=e9] [cursor=pointer]
+      - button "Create account" [ref=e10] [cursor=pointer]
