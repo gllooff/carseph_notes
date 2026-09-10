@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"notes/internal/blob"
 	"notes/internal/config"
 	"notes/internal/sessions"
 	"notes/internal/store"
@@ -53,8 +54,12 @@ func testServer(t *testing.T) *testEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
+	blobs, err := blob.New(cfg.DataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sm := &sessions.Manager{TTL: cfg.SessionTTL, Secure: !cfg.Dev}
-	s := New(cfg, st, wa, sm)
+	s := New(cfg, st, wa, sm, blobs)
 	ts := &httptest.Server{Listener: l, Config: &http.Server{Handler: s.Routes()}}
 	ts.Start()
 	t.Cleanup(ts.Close)

@@ -2,6 +2,7 @@
 package httpapi
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/go-webauthn/webauthn/protocol"
 
+	"notes/internal/blob"
 	"notes/internal/config"
 	"notes/internal/sessions"
 	"notes/internal/store"
@@ -18,15 +20,16 @@ import (
 
 // Server holds all dependencies for the HTTP layer.
 type Server struct {
-	cfg *config.Config
-	st  *store.Store
-	wa  *webauthn.Service
-	sm  *sessions.Manager
+	cfg   *config.Config
+	st    *store.Store
+	wa    *webauthn.Service
+	sm    *sessions.Manager
+	blobs *blob.Store
 }
 
 // New creates the HTTP layer.
-func New(cfg *config.Config, st *store.Store, wa *webauthn.Service, sm *sessions.Manager) *Server {
-	return &Server{cfg: cfg, st: st, wa: wa, sm: sm}
+func New(cfg *config.Config, st *store.Store, wa *webauthn.Service, sm *sessions.Manager, blobs *blob.Store) *Server {
+	return &Server{cfg: cfg, st: st, wa: wa, sm: sm, blobs: blobs}
 }
 
 // Routes builds the application mux, including middleware.
@@ -50,11 +53,48 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PATCH /api/passkeys/{id}", s.auth(s.handlePasskeyRename))
 	mux.HandleFunc("DELETE /api/passkeys/{id}", s.auth(s.handlePasskeyDelete))
 
+	// Notes (authenticated).
+	mux.HandleFunc("GET /api/notes", s.auth(s.listNotes))
+	mux.HandleFunc("POST /api/notes", s.auth(s.createNote))
+	mux.HandleFunc("GET /api/notes/{id}", s.auth(s.getNote))
+	mux.HandleFunc("PUT /api/notes/{id}", s.auth(s.updateNote))
+	mux.HandleFunc("DELETE /api/notes/{id}", s.auth(s.deleteNote))
+
+	// Folders & tags (authenticated).
+	mux.HandleFunc("GET /api/folders", s.auth(s.listFolders))
+	mux.HandleFunc("POST /api/folders", s.auth(s.createFolder))
+	mux.HandleFunc("PATCH /api/folders/{id}", s.auth(s.renameFolder))
+	mux.HandleFunc("DELETE /api/folders/{id}", s.auth(s.deleteFolder))
+	mux.HandleFunc("GET /api/tags", s.auth(s.listTags))
+
 	// Frontend (SPA) last: everything that is not /api falls through here.
 	mux.Handle("/", web.Handler())
 
 	return logMiddleware(secureHeaders(s.checkOrigin(mux)))
 }
+
+// slogWarn logs a warning without failing requests.
+func slogWarn(msg string, err error) {
+	slog.Warn(msg, "err", err)
+}
+
+// sqlNullString mirrors sql.NullString so handlers avoid importing database/sql.
+type sqlNullString = sql.NullString
+
+// sqlNullOf wraps a non-empty string as a nullable folder reference.
+type sqlNull = nullString
+
+func sqlNullOf(v string) nullString { return nullString{Valid: true, String: v} }
+
+func sqlNullOfPtr(p *string) nullString {
+	if p == nil || *p == "" {
+		return nullString{}
+	}
+	return nullString{Valid: true, String: *p}
+}
+
+// nullString mirrors sql.NullString for JSON-facing code.
+type nullString = sqlNullString
 
 // ----- health -----
 

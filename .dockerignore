@@ -1,0 +1,4 @@
+data/
+bin/
+.playwright-mcp/
+.git/

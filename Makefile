@@ -19,10 +19,8 @@ invite:
 	DEV=true DATA_DIR=./data ./bin/notes invite-new
 
 # Local verification via Docker Compose.
-# The distroless container runs as uid 65532; the bind-mounted ./data must be
-# world-writable so SQLite can create its files there.
+# The container runs as host uid (user: 1000:1000) so ./data stays host-owned.
 compose-up:
-	mkdir -p data && chmod 0777 data
 	docker compose up --build -d
 	@echo "App at http://localhost:8085 — mint a code: docker compose exec notes /notes invite-new"
 

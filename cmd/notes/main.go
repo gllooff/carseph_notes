@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"notes/internal/blob"
 	"notes/internal/config"
 	"notes/internal/httpapi"
 	"notes/internal/sessions"
@@ -79,7 +80,12 @@ func serve() {
 	}
 
 	sm := &sessions.Manager{TTL: cfg.SessionTTL, Secure: !cfg.Dev}
-	srv := httpapi.New(cfg, st, wa, sm)
+	blobs, err := blob.New(cfg.DataDir)
+	if err != nil {
+		slog.Error("blob store init", "err", err)
+		os.Exit(1)
+	}
+	srv := httpapi.New(cfg, st, wa, sm, blobs)
 
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddr,

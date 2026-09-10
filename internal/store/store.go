@@ -5,8 +5,10 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"embed"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/url"
@@ -83,7 +85,8 @@ func (s *Store) migrate() error {
 			tx.Rollback()
 			return fmt.Errorf("apply migration %s: %w", e.Name(), err)
 		}
-		if _, err := tx.Exec(`INSERT INTO meta (key, value) VALUES ('schema_version', ?)`, fmt.Sprint(n)); err != nil {
+		if _, err := tx.Exec(`INSERT INTO meta (key, value) VALUES ('schema_version', ?)
+			ON CONFLICT(key) DO UPDATE SET value = excluded.value`, fmt.Sprint(n)); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("record schema_version %d: %w", n, err)
 		}
@@ -95,6 +98,15 @@ func (s *Store) migrate() error {
 }
 
 func now() int64 { return time.Now().Unix() }
+
+// newID generates a random, url-safe 22-char ID for rows.
+func newID() string {
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		panic(err) // crypto/rand failure is unrecoverable
+	}
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
 
 // ----- users -----
 
@@ -209,6 +221,9 @@ func (s *Store) UserByUsername(ctx context.Context, username string) (*User, err
 	}
 	return u, err
 }
+
+// NewID generates a random, url-safe ID; exported for other packages.
+func NewID() string { return newID() }
 
 func isUniqueErr(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "unique constraint")

@@ -67,6 +67,9 @@ func Load() (*Config, error) {
 	return c, nil
 }
 
+// MaxNoteBytes is the per-note body limit in bytes (1 MiB).
+func (c *Config) MaxNoteBytes() int { return 1 << 20 }
+
 func env(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

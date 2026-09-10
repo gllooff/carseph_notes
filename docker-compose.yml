@@ -1,6 +1,7 @@
 services:
   notes:
     build: .
+    user: "1000:1000"   # match host user so ./data stays host-owned (no sudo dance)
     ports:
       - "8085:8080"   # host 8080 may be occupied by other local services
     environment:

@@ -18,11 +18,45 @@
 </header>
 
 <main id="view">
-  <!-- M1: settings / account; notes & files views arrive in M2/M3 -->
-  <section id="page-notes" class="page" hidden>
-    <div class="empty-state">
-      <h2>Notes</h2>
-      <p class="muted">Note CRUD arrives in milestone M2.</p>
+  <section id="page-notes" class="page notes-page" hidden>
+    <div class="notes-layout">
+      <aside class="sidebar">
+        <input id="search" type="text" placeholder="Search titles…" class="search-box">
+        <div class="side-section">
+          <h4>Folders</h4>
+          <ul id="folder-list" class="side-list"></ul>
+          <form id="folder-form" class="inline-form">
+            <input id="folder-name" type="text" placeholder="New folder">
+            <button type="submit" class="mini">+</button>
+          </form>
+        </div>
+        <div class="side-section">
+          <h4>Tags</h4>
+          <ul id="tag-list" class="side-list"></ul>
+        </div>
+      </aside>
+
+      <div class="note-list-col">
+        <div class="list-head">
+          <span id="list-title">All notes</span>
+          <button id="btn-new-note" class="mini">New note</button>
+        </div>
+        <ul id="note-list" class="note-list"></ul>
+      </div>
+
+      <div class="editor-pane" id="editor-pane" hidden>
+        <div class="editor-toolbar">
+          <input id="note-title" type="text" placeholder="Title">
+          <select id="note-folder" class="mini-select"><option value="">Unfiled</option></select>
+          <input id="note-tags" type="text" placeholder="tags, comma,separated" class="tags-input">
+          <button id="btn-save" class="mini primary">Save</button>
+          <button id="btn-delete" class="mini danger">Delete</button>
+        </div>
+        <div class="editor-split">
+          <textarea id="note-body" placeholder="Write Markdown here…" spellcheck="false"></textarea>
+          <div id="preview" class="preview md-body"></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -49,6 +83,8 @@
 </main>
 
 <p id="msg" class="msg" role="alert"></p>
+<script src="/static/vendor/marked.umd.min.js"></script>
+<script src="/static/vendor/dompurify.min.js"></script>
 <script src="/static/vendor/simplewebauthn.umd.min.js"></script>
 <script type="module" src="/static/app.js"></script>
 </body>
