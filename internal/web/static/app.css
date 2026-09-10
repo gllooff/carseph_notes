@@ -177,15 +177,21 @@ button.danger:hover { background: #991b1b; }
 .editor-pane { display: flex; flex-direction: column; }
 .editor-toolbar {
   display: flex;
+  flex-direction: column;
   gap: .5rem;
-  padding: .6rem 1rem;
+  padding: .75rem 1rem;
   border-bottom: 1px solid var(--border);
-  align-items: center;
+}
+.editor-toolbar input[type="text"],
+.editor-toolbar select {
+  width: 100%;
+}
+.editor-actions {
+  display: flex;
+  gap: .6rem;
 }
 #note-title {
-  flex: 1 1 auto;
-  width: auto;        /* override generic input[type=text] width:100% */
-  min-width: 120px;
+  width: 100%;
   font-weight: 600;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -195,7 +201,6 @@ button.danger:hover { background: #991b1b; }
   color: var(--text);
 }
 .mini-select {
-  flex: none;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: .35rem .5rem;
@@ -204,8 +209,6 @@ button.danger:hover { background: #991b1b; }
   color: var(--text);
 }
 input.tags-input {
-  flex: none;
-  width: 180px;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: .35rem .5rem;
