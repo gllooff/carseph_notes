@@ -68,7 +68,6 @@ async function loadNotesView() {
     state.tags = tags.tags;
     await refreshNotes();
     renderSidebar();
-    renderFolderFilter();
   } catch (err) {
     if (err.status === 401) return redirectLogin();
     showError(err);
