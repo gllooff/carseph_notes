@@ -183,23 +183,37 @@ button.danger:hover { background: #991b1b; }
   align-items: center;
 }
 #note-title {
-  flex: 1;
+  flex: 1 1 auto;
+  width: auto;        /* override generic input[type=text] width:100% */
+  min-width: 120px;
   font-weight: 600;
-  border: none;
-  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: .4rem .6rem;
   font-size: 1rem;
   color: var(--text);
 }
-.mini-select, .tags-input {
+.mini-select {
+  flex: none;
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: .3rem .5rem;
+  padding: .35rem .5rem;
   font-size: .85rem;
   background: var(--panel);
   color: var(--text);
 }
-.tags-input { width: 180px; }
-#note-title:focus { outline: none; }
+input.tags-input {
+  flex: none;
+  width: 180px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .35rem .5rem;
+  font-size: .85rem;
+  background: var(--panel);
+  color: var(--text);
+}
+#note-title:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .editor-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
