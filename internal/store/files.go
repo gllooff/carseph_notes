@@ -18,6 +18,7 @@ type File struct {
 	SHA256       string
 	Filename     string // on-disk name
 	CreatedAt    int64
+	Rotation     int // image viewer rotation in degrees: 0, 90, 180, 270
 	Tags         []string
 }
 
@@ -38,9 +39,9 @@ func (s *Store) CreateFile(ctx context.Context, f *File) error {
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO files (id, user_id, folder_id, kind, original_name, mime, size, sha256, filename, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		f.ID, f.UserID, f.FolderID, f.Kind, f.OriginalName, f.Mime, f.Size, f.SHA256, f.Filename, f.CreatedAt); err != nil {
+		`INSERT INTO files (id, user_id, folder_id, kind, original_name, mime, size, sha256, filename, created_at, rotation)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		f.ID, f.UserID, f.FolderID, f.Kind, f.OriginalName, f.Mime, f.Size, f.SHA256, f.Filename, f.CreatedAt, f.Rotation); err != nil {
 		return err
 	}
 	if err := setTagsTx(ctx, tx, "file", f.UserID, f.ID, f.Tags); err != nil {
@@ -51,7 +52,7 @@ func (s *Store) CreateFile(ctx context.Context, f *File) error {
 
 // FilesByUser lists files with tags.
 func (s *Store) FilesByUser(ctx context.Context, userID string, fl FileFilter) ([]*File, error) {
-	q := `SELECT id, user_id, folder_id, kind, original_name, mime, size, sha256, filename, created_at
+	q := `SELECT id, user_id, folder_id, kind, original_name, mime, size, sha256, filename, created_at, rotation
 	      FROM files WHERE user_id = ?`
 	args := []any{userID}
 	if fl.Kind != "" {
@@ -83,7 +84,7 @@ func (s *Store) FilesByUser(ctx context.Context, userID string, fl FileFilter) (
 	for rows.Next() {
 		f := &File{}
 		if err := rows.Scan(&f.ID, &f.UserID, &f.FolderID, &f.Kind, &f.OriginalName,
-			&f.Mime, &f.Size, &f.SHA256, &f.Filename, &f.CreatedAt); err != nil {
+			&f.Mime, &f.Size, &f.SHA256, &f.Filename, &f.CreatedAt, &f.Rotation); err != nil {
 			return nil, err
 		}
 		out = append(out, f)
@@ -113,10 +114,10 @@ func (s *Store) FilesByUser(ctx context.Context, userID string, fl FileFilter) (
 func (s *Store) FileByID(ctx context.Context, userID, id string) (*File, error) {
 	f := &File{}
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, user_id, folder_id, kind, original_name, mime, size, sha256, filename, created_at
+		`SELECT id, user_id, folder_id, kind, original_name, mime, size, sha256, filename, created_at, rotation
 		 FROM files WHERE id = ? AND user_id = ?`, id, userID,
 	).Scan(&f.ID, &f.UserID, &f.FolderID, &f.Kind, &f.OriginalName,
-		&f.Mime, &f.Size, &f.SHA256, &f.Filename, &f.CreatedAt)
+		&f.Mime, &f.Size, &f.SHA256, &f.Filename, &f.CreatedAt, &f.Rotation)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -139,8 +140,8 @@ func (s *Store) UpdateFile(ctx context.Context, f *File) error {
 	}
 	defer tx.Rollback()
 	res, err := tx.ExecContext(ctx,
-		`UPDATE files SET folder_id = ?, original_name = ? WHERE id = ? AND user_id = ?`,
-		f.FolderID, f.OriginalName, f.ID, f.UserID)
+		`UPDATE files SET folder_id = ?, original_name = ?, rotation = ? WHERE id = ? AND user_id = ?`,
+		f.FolderID, f.OriginalName, f.Rotation, f.ID, f.UserID)
 	if err != nil {
 		return err
 	}

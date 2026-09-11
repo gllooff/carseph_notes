@@ -366,10 +366,10 @@ function positionFolderMenu(menu, anchor) {
   const r = anchor.getBoundingClientRect();
   const pad = 4;
   let top = r.bottom + pad;
-  let left = r.left;
   menu.style.maxWidth = '160px';
-  const mR = menu.getBoundingClientRect();
-  if (mR.right > window.innerWidth) left = window.innerWidth - mR.width - pad;
+  const mW = menu.getBoundingClientRect().width;
+  let left = r.left;
+  if (left + mW > window.innerWidth - pad) left = Math.max(pad, window.innerWidth - mW - pad);
   menu.style.top = top + 'px';
   menu.style.left = left + 'px';
 }

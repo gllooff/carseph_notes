@@ -112,13 +112,14 @@ type FilePayload struct {
 	URL          string   `json:"url"`
 	Tags         []string `json:"tags,omitempty"`
 	CreatedAt    int64    `json:"created_at"`
+	Rotation     int      `json:"rotation"`
 }
 
 func filePayload(f *store.File, withTags bool) FilePayload {
 	p := FilePayload{
 		ID: f.ID, Kind: f.Kind, OriginalName: f.OriginalName,
 		Mime: f.Mime, Size: f.Size, URL: "/api/files/" + f.ID + "/raw",
-		CreatedAt: f.CreatedAt, Tags: f.Tags,
+		CreatedAt: f.CreatedAt, Tags: f.Tags, Rotation: f.Rotation,
 	}
 	if f.FolderID.Valid {
 		fid := f.FolderID.String
@@ -266,8 +267,13 @@ func (s *Server) updateFile(w http.ResponseWriter, r *http.Request, u *store.Use
 		FolderID *string   `json:"folder_id"` // null = keep; "" = unfile; id = move
 		Tags     *[]string `json:"tags"`
 		Name     *string   `json:"name"` // null = keep; string = rename
+		Rotation *int      `json:"rotation"`
 	}
 	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Rotation != nil && (*req.Rotation != 0 && *req.Rotation != 90 && *req.Rotation != 180 && *req.Rotation != 270) {
+		writeError(w, http.StatusBadRequest, "bad_rotation", "rotation must be 0, 90, 180 or 270")
 		return
 	}
 	if req.FolderID != nil && *req.FolderID != "" {
@@ -286,6 +292,9 @@ func (s *Server) updateFile(w http.ResponseWriter, r *http.Request, u *store.Use
 		f.Tags = *req.Tags
 	} else {
 		f.Tags = nil
+	}
+	if req.Rotation != nil {
+		f.Rotation = *req.Rotation
 	}
 	if err := s.st.UpdateFile(r.Context(), f); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal", "could not update file")

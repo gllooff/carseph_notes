@@ -84,25 +84,34 @@
     <div class="viewer-bar">
       <span id="viewer-name"></span>
       <div class="viewer-actions" id="viewer-actions">
-        <button id="viewer-copy-md" class="mini" hidden title="Copy a markdown image reference (e.g. ![test.png](/files/...)) to the clipboard for pasting into a note.">Reference</button>
-        <button id="viewer-download" class="mini">Download</button>
-        <button id="viewer-delete" class="mini danger">Delete</button>
-        <button id="viewer-close" class="mini">Close</button>
+        <div class="va-row" id="va-file-actions">
+          <button id="viewer-delete" class="mini danger">Delete</button>
+          <button id="viewer-close" class="mini">Close</button>
+        </div>
+        <div class="va-row" id="va-zoom">
+          <button id="viewer-zoom-out" class="mini" title="Zoom out" hidden>−</button>
+          <span id="viewer-zoom-label" class="mini-label" hidden>100%</span>
+          <button id="viewer-zoom-in" class="mini" title="Zoom in" hidden>+</button>
+          <button id="viewer-img-fit" class="mini" title="Reset zoom and rotation" hidden>Fit</button>
+        </div>
+        <div class="va-row" id="va-rotate">
+          <button id="viewer-rotate-left" class="mini" title="Rotate left" hidden>⟲</button>
+          <button id="viewer-rotate-right" class="mini" title="Rotate right" hidden>⟳</button>
+          <button id="viewer-save-rot" class="mini primary" title="Save rotation" hidden>Save</button>
+        </div>
+        <div class="va-row" id="va-pdf-zoom" hidden>
+          <button id="pdf-prev" class="mini" title="Previous page">‹</button>
+          <span id="pdf-page-label" class="mini-label">1 / 1</span>
+          <button id="pdf-next" class="mini" title="Next page">›</button>
+          <button id="pdf-zoom-out" class="mini" title="Zoom out">−</button>
+          <span id="pdf-zoom-label" class="mini-label">100%</span>
+          <button id="pdf-zoom-in" class="mini" title="Zoom in">+</button>
+          <button id="pdf-zoom-fit" class="mini" title="Fit to screen">Fit</button>
+        </div>
       </div>
     </div>
     <img id="viewer-img" alt="">
     <canvas id="viewer-pdf" hidden></canvas>
-    <div id="pdf-nav" hidden>
-      <button id="pdf-prev" class="mini">‹</button>
-      <span id="pdf-page-label">1 / 1</span>
-      <button id="pdf-next" class="mini">›</button>
-      <span class="pdf-zoom">
-        <button id="pdf-zoom-out" class="mini" title="Zoom out">−</button>
-        <span id="pdf-zoom-label">100%</span>
-        <button id="pdf-zoom-in" class="mini" title="Zoom in">+</button>
-        <button id="pdf-zoom-fit" class="mini" title="Fit to screen">Fit</button>
-      </span>
-    </div>
   </div>
 </main>
 

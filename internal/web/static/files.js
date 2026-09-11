@@ -4,7 +4,7 @@ import { api, post, showError, showMsg } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 
-const state = { current: null, pdfDoc: null, pageNum: 1, zoom: 1 };
+const state = { current: null, pdfDoc: null, pageNum: 1, zoom: 1, imgZoom: 1, imgRot: 0 };
 
 // ----- upload -----
 
@@ -36,17 +36,35 @@ $('file-input').addEventListener('change', async (e) => {
 
 // ----- viewer -----
 
+const imageControlIds = [
+  'viewer-zoom-out', 'viewer-zoom-label', 'viewer-zoom-in',
+  'viewer-rotate-left', 'viewer-rotate-right', 'viewer-img-fit', 'viewer-save-rot',
+];
+
+function setImageControlsVisible(show) {
+  for (const id of imageControlIds) $(id).hidden = !show;
+}
+
+function applyImageTransform() {
+  const img = $('viewer-img');
+  img.style.transform = `rotate(${state.imgRot}deg) scale(${state.imgZoom})`;
+  $('viewer-zoom-label').textContent = Math.round(state.imgZoom * 100) + '%';
+}
+
 export async function openViewer(f) {
   state.current = f;
   $('viewer-overlay').hidden = false;
   $('viewer-name').textContent = f.original_name;
-  $('viewer-copy-md').hidden = f.kind !== 'image';
   $('viewer-img').hidden = f.kind !== 'image';
   const isPdf = f.kind === 'pdf';
   $('viewer-pdf').hidden = !isPdf;
-  $('pdf-nav').hidden = !isPdf;
+  setImageControlsVisible(f.kind === 'image');
+  $('va-pdf-zoom').hidden = !isPdf;
   if (f.kind === 'image') {
+    state.imgZoom = 1;
+    state.imgRot = f.rotation || 0;
     $('viewer-img').src = f.url;
+    applyImageTransform();
     return;
   }
   // PDF via PDF.js
@@ -108,6 +126,36 @@ $('pdf-zoom-fit').addEventListener('click', () => {
   renderPdfPage();
 });
 
+$('viewer-zoom-in').addEventListener('click', () => {
+  state.imgZoom = Math.min(8, state.imgZoom * 1.25);
+  applyImageTransform();
+});
+$('viewer-zoom-out').addEventListener('click', () => {
+  state.imgZoom = Math.max(0.25, state.imgZoom / 1.25);
+  applyImageTransform();
+});
+$('viewer-img-fit').addEventListener('click', () => {
+  state.imgZoom = 1;
+  state.imgRot = (state.current && state.current.rotation) || 0;
+  applyImageTransform();
+});
+$('viewer-rotate-left').addEventListener('click', () => {
+  state.imgRot = (state.imgRot - 90 + 360) % 360;
+  applyImageTransform();
+});
+$('viewer-rotate-right').addEventListener('click', () => {
+  state.imgRot = (state.imgRot + 90) % 360;
+  applyImageTransform();
+});
+$('viewer-save-rot').addEventListener('click', async () => {
+  if (!state.current) return;
+  try {
+    await api('PATCH', `/api/files/${state.current.id}`, { rotation: state.imgRot });
+    state.current.rotation = state.imgRot;
+    showMsg('Rotation saved.', 'ok');
+  } catch (err) { showError(err); }
+});
+
 function closeViewer() {
   $('viewer-overlay').hidden = true;
   $('viewer-img').src = '';
@@ -124,22 +172,6 @@ document.addEventListener('keydown', (e) => {
 
 // ----- actions -----
 
-$('viewer-copy-md').addEventListener('click', async () => {
-  if (!state.current) return;
-  const md = `![${state.current.original_name}](${state.current.url})`;
-  try {
-    await navigator.clipboard.writeText(md);
-    showMsg('Markdown snippet copied.', 'ok');
-  } catch {
-    // clipboard API needs focus/permission; fall back to prompt
-    prompt('Copy this snippet:', md);
-  }
-});
-
-$('viewer-download').addEventListener('click', () => {
-  if (state.current) location.href = state.current.url + '?download=1';
-});
-
 $('viewer-delete').addEventListener('click', async () => {
   if (!state.current) return;
   await deleteFile(state.current);
@@ -149,7 +181,7 @@ $('viewer-delete').addEventListener('click', async () => {
 const viewerMoveBtn = document.createElement('button');
 viewerMoveBtn.className = 'kebab mini';
 viewerMoveBtn.title = 'File options';
-$('viewer-actions').appendChild(viewerMoveBtn);
+$('va-file-actions').appendChild(viewerMoveBtn);
 viewerMoveBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   if (!state.current) return;
@@ -261,6 +293,26 @@ export function openFileMenu(f, anchor) {
   const menu = document.createElement('div');
   menu.className = 'folder-menu';
 
+  if (f.kind === 'image') {
+    const refBtn = document.createElement('button');
+    refBtn.className = 'mf-item';
+    refBtn.textContent = 'Reference';
+    refBtn.title = 'Copy a markdown image reference to the clipboard';
+    refBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      closeFileMenu();
+      const md = `![${f.original_name}](${f.url})`;
+      try {
+        await navigator.clipboard.writeText(md);
+        showMsg('Markdown snippet copied.', 'ok');
+      } catch {
+        // clipboard API needs focus/permission; fall back to prompt
+        prompt('Copy this snippet:', md);
+      }
+    });
+    menu.appendChild(refBtn);
+  }
+
   const moveBtn = document.createElement('button');
   moveBtn.className = 'mf-item';
   moveBtn.textContent = 'Move';
@@ -270,6 +322,16 @@ export function openFileMenu(f, anchor) {
     openMoveDialog(f);
   });
   menu.appendChild(moveBtn);
+
+  const downloadBtn = document.createElement('button');
+  downloadBtn.className = 'mf-item';
+  downloadBtn.textContent = 'Download';
+  downloadBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeFileMenu();
+    location.href = f.url + '?download=1';
+  });
+  menu.appendChild(downloadBtn);
 
   const renameBtn = document.createElement('button');
   renameBtn.className = 'mf-item';
