@@ -146,6 +146,28 @@ async function applyFilter() {
 function renderNoteList() {
   const ul = $('note-list');
   ul.textContent = '';
+  const q = state.filter.q ? state.filter.q.toLowerCase() : '';
+  const folderHits = !state.selecting && q && !state.filter.folder
+    ? state.folders.filter((f) => f.name.toLowerCase().includes(q))
+    : [];
+  for (const f of folderHits) {
+    const li = document.createElement('li');
+    li.classList.add('file-item', 'folder-hit');
+    const t = document.createElement('span');
+    t.className = 'nt';
+    t.textContent = `📁 ${f.name}`;
+    const m = document.createElement('span');
+    m.className = 'nm';
+    m.textContent = `${f.count} item${f.count === 1 ? '' : 's'}`;
+    li.appendChild(t);
+    li.appendChild(m);
+    li.addEventListener('click', () => {
+      state.filter = { folder: f.id };
+      $('search').value = '';
+      applyFilter();
+    });
+    ul.appendChild(li);
+  }
   const items = [
     ...state.notes.map((n) => ({ kind: 'note', ts: n.updated_at, data: n })),
     ...state.files.map((f) => ({ kind: 'file', ts: f.created_at, data: f })),
@@ -163,7 +185,7 @@ function renderNoteList() {
       return state.sort === 'date-desc' ? r : -r;
     });
   }
-  if (!items.length) {
+  if (!items.length && !folderHits.length) {
     const li = document.createElement('li');
     li.className = 'muted';
     li.textContent = state.filter.q || state.filter.tag || state.filter.folder

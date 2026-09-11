@@ -295,6 +295,9 @@ button.danger:hover { background: #991b1b; }
 .note-list .item-check { width: 1rem; height: 1rem; cursor: pointer; }
 .note-list .nt { font-weight: 500; display: block; }
 .note-list .nm { color: var(--muted); font-size: .8rem; }
+.note-list li.folder-hit { background: rgba(21, 128, 61, .06); }
+.note-list li.folder-hit:hover { background: rgba(21, 128, 61, .12); }
+.note-list li.folder-hit .nt { color: #15803d; }
 
 .editor-pane { display: flex; flex-direction: column; }
 .editor-toolbar {

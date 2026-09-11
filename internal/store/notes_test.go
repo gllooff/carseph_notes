@@ -131,6 +131,11 @@ func TestNoteFilters(t *testing.T) {
 	if len(ns) != 1 || ns[0].ID != "a" {
 		t.Fatalf("title filter: %v", ns)
 	}
+	// Folder-name substring matches the note inside it.
+	ns, _ = s.NotesByUser(ctx, alice, NoteFilter{Q: "proj"})
+	if len(ns) != 1 || ns[0].ID != "a" {
+		t.Fatalf("folder-name filter: %v", ns)
+	}
 }
 
 func TestFolderLifecycle(t *testing.T) {

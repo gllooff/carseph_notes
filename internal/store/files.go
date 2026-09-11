@@ -71,8 +71,10 @@ func (s *Store) FilesByUser(ctx context.Context, userID string, fl FileFilter) (
 		args = append(args, fl.Tag)
 	}
 	if fl.Q != "" {
-		q += ` AND instr(lower(original_name), lower(?)) > 0`
-		args = append(args, fl.Q)
+		q += ` AND (instr(lower(original_name), lower(?)) > 0
+		       OR EXISTS (SELECT 1 FROM folders fo WHERE fo.id = files.folder_id
+		                  AND instr(lower(fo.name), lower(?)) > 0))`
+		args = append(args, fl.Q, fl.Q)
 	}
 	q += ` ORDER BY created_at DESC`
 	rows, err := s.db.QueryContext(ctx, q, args...)

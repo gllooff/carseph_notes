@@ -72,8 +72,10 @@ func (s *Store) NotesByUser(ctx context.Context, userID string, f NoteFilter) ([
 		args = append(args, f.Tag)
 	}
 	if f.Q != "" {
-		q += ` AND instr(lower(n.title), lower(?)) > 0`
-		args = append(args, f.Q)
+		q += ` AND (instr(lower(n.title), lower(?)) > 0
+		       OR EXISTS (SELECT 1 FROM folders fo WHERE fo.id = n.folder_id
+		                  AND instr(lower(fo.name), lower(?)) > 0))`
+		args = append(args, f.Q, f.Q)
 	}
 	q += ` ORDER BY n.updated_at DESC`
 	rows, err := s.db.QueryContext(ctx, q, args...)
