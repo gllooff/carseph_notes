@@ -31,6 +31,10 @@ func Handler() http.Handler {
 				files.ServeHTTP(w, r)
 				return
 			}
+			if strings.HasPrefix(p, "note/") {
+				serveWithCache(w, sub, "note.html")
+				return
+			}
 			serveWithCache(w, sub, "index.html")
 		}
 	})

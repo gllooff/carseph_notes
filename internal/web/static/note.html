@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carseph Notes — Editor</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">Carseph Notes</a>
+  <nav id="mainnav" hidden>
+    <a href="/" data-nav="notes">Notes</a>
+    <span id="nav-user" class="nav-user"></span>
+    <button id="btn-logout" class="linklike">Sign out</button>
+  </nav>
+</header>
+
+<main id="view">
+  <div class="editor-pane" id="editor-pane">
+    <div class="editor-toolbar">
+      <input id="note-title" type="text" placeholder="Title">
+      <select id="note-folder" class="mini-select"><option value="">Unfiled</option></select>
+      <input id="note-tags" type="text" placeholder="tags, comma,separated" class="tags-input">
+      <div class="editor-actions">
+        <button id="btn-save" class="primary">Save</button>
+        <button id="btn-cancel" class="mini">Cancel</button>
+        <button id="btn-toggle-mode" class="mini">Preview</button>
+        <button id="btn-delete" class="danger">Delete</button>
+      </div>
+    </div>
+    <div class="editor-split">
+      <textarea id="note-body" placeholder="Write Markdown here…" spellcheck="false"></textarea>
+      <div id="preview" class="preview md-body"></div>
+    </div>
+  </div>
+</main>
+
+<p id="msg" class="msg" role="alert"></p>
+<script src="/static/vendor/marked.umd.min.js"></script>
+<script src="/static/vendor/dompurify.min.js"></script>
+<script type="module" src="/static/note.js"></script>
+</body>
+</html>

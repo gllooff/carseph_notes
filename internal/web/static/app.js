@@ -4,10 +4,6 @@ import { api, post, showError, showMsg } from './api.js';
 import { openViewer, openFileMenu } from './files.js';
 
 const { startRegistration } = window.SimpleWebAuthnBrowser;
-const { marked } = window.marked;
-const DOMPurify = window.DOMPurify;
-
-marked.setOptions({ breaks: true, gfm: true });
 
 // ----- router -----
 
@@ -31,12 +27,6 @@ function render() {
   if (route === 'notes') loadNotesView();
 }
 
-// ----- markdown -----
-
-function renderMarkdown(text) {
-  return DOMPurify.sanitize(marked.parse(text || ''));
-}
-
 // ----- notes state -----
 
 const state = {
@@ -45,7 +35,6 @@ const state = {
   folders: [],
   tags: [],
   filter: {},          // {folder:'id'|'none', tag:'x', q:'y'}
-  currentId: null,
   dirty: false,
 };
 
@@ -147,7 +136,6 @@ async function applyFilter() {
   try {
     await refreshNotes();
     renderSidebar();
-    closeEditor();
   } catch (err) { showError(err); }
 }
 
@@ -171,7 +159,6 @@ function renderNoteList() {
     if (it.kind === 'note') {
       const n = it.data;
       li.dataset.id = n.id;
-      if (n.id === state.currentId) li.classList.add('active');
       const t = document.createElement('span');
       t.className = 'nt';
       t.textContent = n.title;
@@ -181,7 +168,7 @@ function renderNoteList() {
       m.textContent = `${new Date(n.updated_at * 1000).toLocaleDateString()}${tags}`;
       li.appendChild(t);
       li.appendChild(m);
-      li.addEventListener('click', () => openNote(n.id));
+      li.addEventListener('click', () => { location.href = `/note/${n.id}`; });
     } else {
       const f = it.data;
       li.classList.add('file-item');
@@ -211,105 +198,6 @@ function fmtSize(n) {
   if (n > 1 << 20) return (n / (1 << 20)).toFixed(1) + ' MB';
   if (n > 1 << 10) return (n / (1 << 10)).toFixed(0) + ' KB';
   return n + ' B';
-}
-
-// ----- editor -----
-
-let editorMode = 'edit'; // 'edit' | 'preview'
-
-function setEditorMode(mode) {
-  editorMode = mode;
-  const editing = mode === 'edit';
-  $('note-body').hidden = !editing;
-  $('preview').hidden = editing;
-  $('btn-save').hidden = !editing;
-  $('btn-cancel').hidden = !editing;
-  $('btn-toggle-mode').textContent = editing ? 'Preview' : 'Edit';
-}
-
-async function openNote(id) {
-  try {
-    const n = await api('GET', `/api/notes/${id}`);
-    state.currentId = n.id;
-    $('editor-pane').hidden = false;
-    setEditorMode('preview');
-    $('note-title').value = n.title;
-    $('note-body').value = n.body || '';
-    $('preview').innerHTML = renderMarkdown(n.body || '');
-    populateFolderSelectAndSet(n.folder_id || '');
-    $('note-tags').value = (n.tags || []).join(', ');
-    for (const li of document.querySelectorAll('#note-list li')) {
-      li.classList.toggle('active', li.dataset.id === id);
-    }
-  } catch (err) { showError(err); }
-}
-
-// populateFolderSelectAndSet refills the folder <select> and sets a value.
-function populateFolderSelectAndSet(folderId) {
-  const sel = $('note-folder');
-  sel.textContent = '';
-  const optNone = document.createElement('option');
-  optNone.value = '';
-  optNone.textContent = 'Unfiled';
-  sel.appendChild(optNone);
-  for (const f of state.folders) {
-    const o = document.createElement('option');
-    o.value = f.id;
-    o.textContent = f.name;
-    sel.appendChild(o);
-  }
-  sel.value = folderId || '';
-}
-
-function closeEditor() {
-  state.currentId = null;
-  $('editor-pane').hidden = true;
-}
-
-function newNote() {
-  state.currentId = null;
-  $('editor-pane').hidden = false;
-  setEditorMode('edit');
-  $('note-title').value = '';
-  $('note-title').focus();
-  $('note-body').value = '';
-  $('preview').innerHTML = renderMarkdown('');
-  populateFolderSelectAndSet(state.filter.folder === 'none' ? '' : state.filter.folder || '');
-  $('note-tags').value = state.filter.tag || '';
-}
-
-function editorPayload() {
-  const folderId = $('note-folder').value || null;
-  const tags = $('note-tags').value.split(',').map((s) => s.trim()).filter(Boolean);
-  return { title: $('note-title').value.trim() || 'Untitled', body: $('note-body').value, folder_id: folderId, tags };
-}
-
-async function saveNote() {
-  try {
-    const payload = editorPayload();
-    if (state.currentId) {
-      await api('PUT', `/api/notes/${state.currentId}`, payload);
-    } else {
-      const n = await post('/api/notes', payload);
-      state.currentId = n.id;
-    }
-    showMsg('Saved.', 'ok');
-    await loadNotesView();
-    // restore selection after refresh
-    for (const li of document.querySelectorAll('#note-list li')) {
-      li.classList.toggle('active', li.dataset.id === state.currentId);
-    }
-  } catch (err) { showError(err); }
-}
-
-async function deleteCurrentNote() {
-  if (!state.currentId) return;
-  if (!confirm('Delete this note? This cannot be undone.')) return;
-  try {
-    await api('DELETE', `/api/notes/${state.currentId}`);
-    closeEditor();
-    await refreshNotes();
-  } catch (err) { showError(err); }
 }
 
 // ----- folders -----
@@ -488,7 +376,14 @@ function toggleNewNoteMenu(anchor) {
   const md = document.createElement('button');
   md.className = 'mf-item';
   md.textContent = 'Markdown note';
-  md.addEventListener('click', () => { closeNewNoteMenu(); newNote(); });
+  md.addEventListener('click', () => {
+    closeNewNoteMenu();
+    const params = new URLSearchParams();
+    if (state.filter.folder && state.filter.folder !== 'none') params.set('folder', state.filter.folder);
+    if (state.filter.tag) params.set('tag', state.filter.tag);
+    const qs = params.toString();
+    location.href = '/note/new' + (qs ? `?${qs}` : '');
+  });
   const up = document.createElement('button');
   up.className = 'mf-item';
   up.textContent = 'Upload file…';
@@ -520,23 +415,6 @@ function closeNewNoteMenuOnClick(e) {
 }
 
 document.getElementById('btn-new-note').addEventListener('click', (e) => toggleNewNoteMenu(e.currentTarget));
-document.getElementById('btn-save').addEventListener('click', saveNote);
-document.getElementById('btn-cancel').addEventListener('click', () => { closeEditor(); });
-document.getElementById('btn-toggle-mode').addEventListener('click', () => {
-  setEditorMode(editorMode === 'edit' ? 'preview' : 'edit');
-});
-document.getElementById('btn-delete').addEventListener('click', async () => {
-  if (!state.currentId) return;
-  if (!confirm('Delete this note? This cannot be undone.')) return;
-  try {
-    await api('DELETE', `/api/notes/${state.currentId}`);
-    closeEditor();
-    await refreshNotes();
-  } catch (err) { showError(err); }
-});
-document.getElementById('note-body').addEventListener('input', (e) => {
-  $('preview').innerHTML = renderMarkdown(e.target.value);
-});
 document.getElementById('search').addEventListener('input', (e) => {
   state.filter.q = e.target.value.trim() || undefined;
   if (!state.filter.q) delete state.filter.q;

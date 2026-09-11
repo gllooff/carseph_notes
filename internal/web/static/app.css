@@ -131,7 +131,7 @@ button.linklike.danger:hover { background: #991b1b; }
 .notes-page { padding: 0; overflow: hidden; max-width: 100%; margin: 0; border: none; border-radius: 0; }
 .notes-layout {
   display: grid;
-  grid-template-columns: 220px 260px 1fr;
+  grid-template-columns: 220px 1fr;
   min-height: 60vh;
 }
 .sidebar {
@@ -263,7 +263,7 @@ button.danger:hover { background: #991b1b; }
 
 .search-box { margin-bottom: .5rem; font-size: .9rem; }
 
-.note-list-col { border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.note-list-col { display: flex; flex-direction: column; }
 .list-head {
   display: flex;
   justify-content: space-between;
