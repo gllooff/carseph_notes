@@ -1,76 +1,10 @@
-// Files page: gallery, upload, image lightbox, PDF.js viewer.
+// Files: upload, image lightbox, PDF.js viewer, and the file menu (move/rename).
 
 import { api, post, showError, showMsg } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 
-const state = { files: [], kind: '', current: null, pdfDoc: null, pageNum: 1, folders: [] };
-
-// ----- loading -----
-
-async function loadFiles() {
-  try {
-    if (!state.folders.length) {
-      const fRes = await api('GET', '/api/folders');
-      state.folders = fRes.folders;
-    }
-    const qs = state.kind ? `?kind=${state.kind}` : '';
-    const res = await api('GET', '/api/files' + qs);
-    state.files = res.files;
-    renderGrid();
-  } catch (err) {
-    if (err.status === 401) { location.href = '/login'; return; }
-    showError(err);
-  }
-}
-
-function renderGrid() {
-  const grid = $('file-grid');
-  grid.textContent = '';
-  if (!state.files.length) {
-    const p = document.createElement('p');
-    p.className = 'muted';
-    p.textContent = 'No files yet — upload an image or PDF.';
-    grid.appendChild(p);
-    return;
-  }
-  for (const f of state.files) {
-    const card = document.createElement('div');
-    card.className = 'file-card';
-    if (f.kind === 'image') {
-      const img = document.createElement('img');
-      img.loading = 'lazy';
-      img.src = f.url;
-      card.appendChild(img);
-    } else {
-      const badge = document.createElement('div');
-      badge.className = 'pdf-badge';
-      badge.textContent = '📄';
-      card.appendChild(badge);
-    }
-    const name = document.createElement('span');
-    name.className = 'fc-name';
-    name.textContent = f.original_name;
-    card.appendChild(name);
-    const meta = document.createElement('span');
-    meta.className = 'fc-meta';
-    meta.innerHTML = `<span>${fmtSize(f.size)}</span><span>${new Date(f.created_at * 1000).toLocaleDateString()}</span>`;
-    card.appendChild(meta);
-    const del = document.createElement('button');
-    del.className = 'fc-del';
-    del.textContent = 'Delete';
-    del.addEventListener('click', (e) => { e.stopPropagation(); deleteFile(f); });
-    card.appendChild(del);
-    card.addEventListener('click', () => openViewer(f));
-    grid.appendChild(card);
-  }
-}
-
-function fmtSize(n) {
-  if (n > 1 << 20) return (n / (1 << 20)).toFixed(1) + ' MB';
-  if (n > 1 << 10) return (n / (1 << 10)).toFixed(0) + ' KB';
-  return n + ' B';
-}
+const state = { current: null, pdfDoc: null, pageNum: 1 };
 
 // ----- upload -----
 
@@ -79,6 +13,7 @@ $('file-input').addEventListener('change', async (e) => {
   if (!file) return;
   const fd = new FormData();
   fd.append('file', file);
+  if (e.target.dataset.folder) fd.append('folder_id', e.target.dataset.folder);
   try {
     // Browsers send Origin automatically on POST; don't set forbidden headers.
     const res = await fetch('/api/files', {
@@ -91,7 +26,6 @@ $('file-input').addEventListener('change', async (e) => {
       throw new Error(j && j.error ? j.error.message : `HTTP ${res.status}`);
     }
     showMsg('Uploaded.', 'ok');
-    await loadFiles();
     document.dispatchEvent(new CustomEvent('files-changed'));
   } catch (err) {
     showError(err);
@@ -99,18 +33,6 @@ $('file-input').addEventListener('change', async (e) => {
     e.target.value = '';
   }
 });
-
-// ----- tabs -----
-
-for (const [id, kind] of [['tab-all', ''], ['tab-image', 'image'], ['tab-pdf', 'pdf']]) {
-  $(id).addEventListener('click', async () => {
-    state.kind = kind;
-    for (const [tid] of [['tab-all'], ['tab-image'], ['tab-pdf']]) {
-      $(tid).classList.toggle('active', tid === id);
-    }
-    await loadFiles();
-  });
-}
 
 // ----- viewer -----
 
@@ -145,11 +67,15 @@ async function renderPdfPage() {
   if (!doc) return;
   const page = await doc.getPage(state.pageNum);
   const canvas = $('viewer-pdf');
-  const scale = 1.5;
+  const base = page.getViewport({ scale: 1 });
+  const availW = window.innerWidth - 4 * 16;
+  const availH = window.innerHeight - 9 * 16;
+  const scale = Math.min(availW / base.width, availH / base.height);
   const viewport = page.getViewport({ scale });
   canvas.width = viewport.width;
   canvas.height = viewport.height;
-  canvas.style.width = Math.min(viewport.width, window.innerWidth - 80) + 'px';
+  canvas.style.width = viewport.width + 'px';
+  canvas.style.height = viewport.height + 'px';
   const ctx = canvas.getContext('2d');
   await page.render({ canvasContext: ctx, viewport }).promise;
   $('pdf-page-label').textContent = `${state.pageNum} / ${doc.numPages}`;
@@ -215,7 +141,6 @@ async function deleteFile(f) {
   try {
     await api('DELETE', `/api/files/${f.id}`);
     closeViewer();
-    await loadFiles();
     document.dispatchEvent(new CustomEvent('files-changed'));
   } catch (err) { showError(err); }
 }
@@ -224,7 +149,6 @@ async function moveFileToFolder(f, folderId) {
   try {
     await api('PATCH', `/api/files/${f.id}`, { folder_id: folderId || null });
     showMsg('Moved.', 'ok');
-    await loadFiles();
     document.dispatchEvent(new CustomEvent('files-changed'));
     if (state.current && state.current.id === f.id) {
       state.current.folder_id = folderId || null;
@@ -243,9 +167,71 @@ async function renameFile(f) {
       state.current.original_name = f.original_name;
       $('viewer-name').textContent = f.original_name;
     }
-    await loadFiles();
     document.dispatchEvent(new CustomEvent('files-changed'));
   } catch (err) { showError(err); }
+}
+
+async function openMoveDialog(f) {
+  let folders;
+  try {
+    const res = await api('GET', '/api/folders');
+    folders = res.folders;
+  } catch (err) { showError(err); return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+
+  const h3 = document.createElement('h3');
+  h3.textContent = `Move "${f.original_name}" to…`;
+  box.appendChild(h3);
+
+  const list = document.createElement('div');
+  list.className = 'modal-folder-list';
+  const opts = [{ id: '', name: 'Unfiled' }, ...(folders || [])];
+  let selected = f.folder_id || '';
+  for (const o of opts) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mf-folder-opt' + (o.id === selected ? ' selected' : '');
+    btn.textContent = o.name;
+    btn.addEventListener('click', () => {
+      selected = o.id;
+      for (const el of list.querySelectorAll('.mf-folder-opt')) {
+        el.classList.toggle('selected', el === btn);
+      }
+    });
+    list.appendChild(btn);
+  }
+  box.appendChild(list);
+
+  const row = document.createElement('div');
+  row.className = 'modal-actions';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'secondary';
+  cancel.textContent = 'Cancel';
+  const move = document.createElement('button');
+  move.className = 'primary';
+  move.textContent = 'Move';
+  row.append(cancel, move);
+  box.appendChild(row);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => {
+    document.removeEventListener('keydown', onKey);
+    overlay.remove();
+  };
+  cancel.addEventListener('click', close);
+  move.addEventListener('click', () => {
+    close();
+    moveFileToFolder(f, selected || null);
+  });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', onKey);
 }
 
 let activeFileMenu = null;
@@ -255,36 +241,21 @@ export function openFileMenu(f, anchor) {
   const menu = document.createElement('div');
   menu.className = 'folder-menu';
 
-  const folders = state.folders || [];
-  const select = document.createElement('select');
-  select.style.cssText = 'width:100%;padding:.35rem .5rem;font-size:.85rem;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);margin:.25rem 0;';
-  const optNone = document.createElement('option');
-  optNone.value = '';
-  optNone.textContent = 'Unfiled';
-  select.appendChild(optNone);
-  for (const fo of folders) {
-    const o = document.createElement('option');
-    o.value = fo.id;
-    o.textContent = fo.name;
-    if (fo.id === f.folder_id) o.selected = true;
-    select.appendChild(o);
-  }
-  menu.appendChild(select);
-
   const moveBtn = document.createElement('button');
   moveBtn.className = 'mf-item';
   moveBtn.textContent = 'Move';
-  moveBtn.addEventListener('click', () => {
-    const folderId = select.value || null;
+  moveBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     closeFileMenu();
-    moveFileToFolder(f, folderId);
+    openMoveDialog(f);
   });
   menu.appendChild(moveBtn);
 
   const renameBtn = document.createElement('button');
   renameBtn.className = 'mf-item';
   renameBtn.textContent = 'Rename';
-  renameBtn.addEventListener('click', () => {
+  renameBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     closeFileMenu();
     renameFile(f);
   });
@@ -321,10 +292,3 @@ function closeFileMenuOnClick(e) {
     closeFileMenu();
   }
 }
-
-// hook into the main router: re-load files view when it becomes visible
-const observer = new MutationObserver(() => {
-  const page = $('page-files');
-  if (page && !page.hidden) loadFiles();
-});
-observer.observe($('page-files'), { attributes: true, attributeFilter: ['hidden'] });

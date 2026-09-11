@@ -34,11 +34,12 @@ func (s *Store) CreateFolder(ctx context.Context, userID, name string) (*Folder,
 	return f, nil
 }
 
-// FoldersByUser lists folders with note counts.
+// FoldersByUser lists folders with note+file counts.
 func (s *Store) FoldersByUser(ctx context.Context, userID string) ([]*Folder, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT f.id, f.user_id, f.name, f.created_at,
-		        (SELECT COUNT(*) FROM notes n WHERE n.folder_id = f.id) AS cnt
+		        (SELECT COUNT(*) FROM notes n WHERE n.folder_id = f.id)
+		      + (SELECT COUNT(*) FROM files fi WHERE fi.folder_id = f.id) AS cnt
 		 FROM folders f WHERE f.user_id = ? ORDER BY f.name`, userID)
 	if err != nil {
 		return nil, err

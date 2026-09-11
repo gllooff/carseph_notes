@@ -11,7 +11,7 @@ marked.setOptions({ breaks: true, gfm: true });
 
 // ----- router -----
 
-const pages = ['notes', 'files', 'settings'];
+const pages = ['notes', 'settings'];
 
 function currentRoute() {
   const p = location.pathname.replace(/^\/|\/$/g, '');
@@ -478,7 +478,11 @@ function toggleNewNoteMenu(anchor) {
   const up = document.createElement('button');
   up.className = 'mf-item';
   up.textContent = 'Upload file…';
-  up.addEventListener('click', () => { closeNewNoteMenu(); $('file-input').click(); });
+  up.addEventListener('click', () => {
+    closeNewNoteMenu();
+    $('file-input').dataset.folder = state.filter.folder || '';
+    $('file-input').click();
+  });
   menu.appendChild(md);
   menu.appendChild(up);
   document.body.appendChild(menu);
@@ -529,7 +533,8 @@ function redirectLogin() { location.href = '/login'; }
 
 async function boot() {
   try {
-    await api('GET', '/api/auth/me'); // 401 → redirect to login
+    const me = await api('GET', '/api/auth/me'); // 401 → redirect to login
+    document.getElementById('nav-user').textContent = me.user.username;
     document.getElementById('mainnav').hidden = false;
     render();
   } catch (err) {

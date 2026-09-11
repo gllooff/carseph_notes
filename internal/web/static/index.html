@@ -12,6 +12,7 @@
   <nav id="mainnav" hidden>
     <a href="/" data-nav="notes">Notes</a>
     <a href="/settings" data-nav="settings">Settings</a>
+    <span id="nav-user" class="nav-user"></span>
     <button id="btn-logout" class="linklike">Sign out</button>
   </nav>
 </header>
@@ -61,20 +62,6 @@
     </div>
   </section>
 
-  <section id="page-files" class="page files-page" hidden>
-    <div class="files-layout">
-      <div class="files-controls">
-        <div class="kind-tabs">
-          <button id="tab-all" class="tab active">All</button>
-          <button id="tab-image" class="tab">Images</button>
-          <button id="tab-pdf" class="tab">PDFs</button>
-        </div>
-        <label class="upload-btn" for="file-input">Upload</label>
-      </div>
-      <div id="file-grid" class="file-grid"></div>
-    </div>
-  </section>
-
   <section id="page-settings" class="page" hidden>
     <h2>Account</h2>
     <p>Signed in as <strong id="whoami">…</strong></p>
@@ -95,7 +82,7 @@
     <div class="viewer-bar">
       <span id="viewer-name"></span>
       <div class="viewer-actions" id="viewer-actions">
-        <button id="viewer-copy-md" class="mini" hidden>Copy ![]()</button>
+        <button id="viewer-copy-md" class="mini" hidden title="Copy a markdown image reference (e.g. ![test.png](/files/...)) to the clipboard for pasting into a note.">Reference</button>
         <button id="viewer-download" class="mini">Download</button>
         <button id="viewer-delete" class="mini danger">Delete</button>
         <button id="viewer-close" class="mini">Close</button>
