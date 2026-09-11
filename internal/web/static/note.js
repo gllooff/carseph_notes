@@ -11,7 +11,7 @@ const $ = (id) => document.getElementById(id);
 
 // ----- state -----
 
-const state = { currentId: null, folders: [] };
+const state = { currentId: null, folders: [], savedPayload: null };
 
 function renderMarkdown(text) {
   return DOMPurify.sanitize(marked.parse(text || ''));
@@ -78,6 +78,7 @@ async function openNote(id) {
     $('preview').innerHTML = renderMarkdown(n.body || '');
     populateFolderSelectAndSet(n.folder_id || '');
     $('note-tags').value = (n.tags || []).join(', ');
+    state.savedPayload = editorPayload();
   } catch (err) {
     showError(err);
     if (err.status === 404) location.href = '/';
@@ -98,12 +99,23 @@ function initNewNote() {
   const params = new URLSearchParams(location.search);
   populateFolderSelectAndSet(params.get('folder') || '');
   $('note-tags').value = params.get('tag') || '';
+  state.savedPayload = editorPayload();
 }
 
 function editorPayload() {
   const folderId = $('note-folder').value || null;
   const tags = $('note-tags').value.split(',').map((s) => s.trim()).filter(Boolean);
   return { title: $('note-title').value.trim() || 'Untitled', body: $('note-body').value, folder_id: folderId, tags };
+}
+
+function payloadsEqual(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function hasUnsavedChanges() {
+  const baseline = state.savedPayload;
+  if (!baseline) return false;
+  return !payloadsEqual(baseline, editorPayload());
 }
 
 async function saveNote() {
@@ -119,6 +131,7 @@ async function saveNote() {
       $('btn-save-tags').hidden = false;
       history.replaceState(null, '', `/note/${n.id}`);
     }
+    state.savedPayload = payload;
     showMsg('Saved.', 'ok');
   } catch (err) { showError(err); }
 }
@@ -129,6 +142,7 @@ async function saveTitle() {
   try {
     await api('PUT', `/api/notes/${state.currentId}`, { title });
     document.title = `${title} — Carseph Notes`;
+    if (state.savedPayload) state.savedPayload.title = title;
     showMsg('Title saved.', 'ok');
   } catch (err) { showError(err); }
 }
@@ -137,6 +151,7 @@ async function saveFolder() {
   if (!state.currentId) return;
   try {
     await api('PUT', `/api/notes/${state.currentId}`, { folder_id: $('note-folder').value || null });
+    if (state.savedPayload) state.savedPayload.folder_id = $('note-folder').value || null;
     showMsg('Folder saved.', 'ok');
   } catch (err) { showError(err); }
 }
@@ -146,6 +161,7 @@ async function saveTags() {
   const tags = $('note-tags').value.split(',').map((s) => s.trim()).filter(Boolean);
   try {
     await api('PUT', `/api/notes/${state.currentId}`, { tags });
+    if (state.savedPayload) state.savedPayload.tags = tags;
     showMsg('Tags saved.', 'ok');
   } catch (err) { showError(err); }
 }
@@ -171,7 +187,10 @@ document.getElementById('btn-save-tags').addEventListener('click', saveTags);
 document.getElementById('note-tags').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); saveTags(); }
 });
-document.getElementById('btn-cancel').addEventListener('click', () => { location.href = '/'; });
+document.getElementById('btn-cancel').addEventListener('click', () => {
+  if (hasUnsavedChanges() && !confirm('Discard unsaved changes and close this note?')) return;
+  location.href = '/';
+});
 document.getElementById('btn-toggle-mode').addEventListener('click', () => {
   setEditorMode(editorMode === 'edit' ? 'preview' : 'edit');
 });

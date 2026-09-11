@@ -348,13 +348,16 @@ input.tags-input {
 }
 #note-title:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .editor-split {
-  display: block;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 55vh;
 }
 #note-body {
   border: none;
   resize: none;
+  flex: 1;
+  width: 100%;
   padding: 1rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: .9rem;
@@ -363,7 +366,7 @@ input.tags-input {
   color: var(--text);
 }
 #note-body:focus { outline: none; }
-.preview { padding: 1rem 1.25rem; overflow-y: auto; background: #fff; }
+.preview { flex: 1; padding: 1rem 1.25rem; overflow-y: auto; background: #fff; }
 
 /* markdown rendering */
 .md-body h1, .md-body h2, .md-body h3 { margin: .8em 0 .4em; }
