@@ -4,7 +4,7 @@ import { api, post, showError, showMsg } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 
-const state = { current: null, pdfDoc: null, pageNum: 1 };
+const state = { current: null, pdfDoc: null, pageNum: 1, zoom: 1 };
 
 // ----- upload -----
 
@@ -56,6 +56,7 @@ export async function openViewer(f) {
     const task = pdfjs.getDocument({ url: f.url });
     state.pdfDoc = await task.promise;
     state.pageNum = 1;
+    state.zoom = 1;
     await renderPdfPage();
   } catch (err) {
     showError(new Error('Could not open PDF: ' + err.message));
@@ -70,15 +71,22 @@ async function renderPdfPage() {
   const base = page.getViewport({ scale: 1 });
   const availW = window.innerWidth - 4 * 16;
   const availH = window.innerHeight - 9 * 16;
-  const scale = Math.min(availW / base.width, availH / base.height);
+  const fit = Math.min(availW / base.width, availH / base.height);
+  const scale = fit * state.zoom;
   const viewport = page.getViewport({ scale });
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(viewport.width * dpr);
+  canvas.height = Math.floor(viewport.height * dpr);
   canvas.style.width = viewport.width + 'px';
   canvas.style.height = viewport.height + 'px';
   const ctx = canvas.getContext('2d');
-  await page.render({ canvasContext: ctx, viewport }).promise;
+  await page.render({
+    canvasContext: ctx,
+    viewport,
+    transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null,
+  }).promise;
   $('pdf-page-label').textContent = `${state.pageNum} / ${doc.numPages}`;
+  $('pdf-zoom-label').textContent = Math.round(state.zoom * 100) + '%';
 }
 
 $('pdf-prev').addEventListener('click', async () => {
@@ -86,6 +94,18 @@ $('pdf-prev').addEventListener('click', async () => {
 });
 $('pdf-next').addEventListener('click', async () => {
   if (state.pdfDoc && state.pageNum < state.pdfDoc.numPages) { state.pageNum++; await renderPdfPage(); }
+});
+$('pdf-zoom-in').addEventListener('click', () => {
+  state.zoom = Math.min(4, state.zoom * 1.25);
+  renderPdfPage();
+});
+$('pdf-zoom-out').addEventListener('click', () => {
+  state.zoom = Math.max(0.5, state.zoom / 1.25);
+  renderPdfPage();
+});
+$('pdf-zoom-fit').addEventListener('click', () => {
+  state.zoom = 1;
+  renderPdfPage();
 });
 
 function closeViewer() {

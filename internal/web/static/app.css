@@ -369,6 +369,7 @@ input.tags-input {
   display: flex;
   flex-direction: column;
   padding: 2.5rem 2rem 1rem;
+  overflow-y: auto;
 }
 .viewer-bar {
   display: flex;
@@ -388,11 +389,22 @@ input.tags-input {
 #viewer-pdf {
   background: #fff;
   margin: 0 auto;
-  max-height: calc(100vh - 9rem);
   box-shadow: 0 4px 30px rgba(0,0,0,.5);
 }
 .pdf-nav { text-align: center; color: #fff; margin-top: .75rem; }
 .pdf-nav button { margin: 0 .5rem; }
+.pdf-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  margin-left: 1rem;
+}
+.pdf-zoom button { margin: 0; }
+#pdf-zoom-label {
+  min-width: 3.4em;
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ----- misc ----- */
 
