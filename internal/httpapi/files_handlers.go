@@ -265,6 +265,7 @@ func (s *Server) updateFile(w http.ResponseWriter, r *http.Request, u *store.Use
 	var req struct {
 		FolderID *string   `json:"folder_id"` // null = keep; "" = unfile; id = move
 		Tags     *[]string `json:"tags"`
+		Name     *string   `json:"name"` // null = keep; string = rename
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -274,6 +275,9 @@ func (s *Server) updateFile(w http.ResponseWriter, r *http.Request, u *store.Use
 			writeError(w, http.StatusBadRequest, "bad_folder", "unknown folder")
 			return
 		}
+	}
+	if req.Name != nil {
+		f.OriginalName = sanitizeFilename(*req.Name)
 	}
 	if req.FolderID != nil {
 		f.FolderID = sqlNullOfPtr(req.FolderID)

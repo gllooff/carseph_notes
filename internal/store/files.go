@@ -131,7 +131,7 @@ func (s *Store) FileByID(ctx context.Context, userID, id string) (*File, error) 
 	return f, nil
 }
 
-// UpdateFile moves a file between folders and/or sets tags.
+// UpdateFile moves a file between folders, renames it, and/or sets tags.
 func (s *Store) UpdateFile(ctx context.Context, f *File) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -139,8 +139,8 @@ func (s *Store) UpdateFile(ctx context.Context, f *File) error {
 	}
 	defer tx.Rollback()
 	res, err := tx.ExecContext(ctx,
-		`UPDATE files SET folder_id = ? WHERE id = ? AND user_id = ?`,
-		f.FolderID, f.ID, f.UserID)
+		`UPDATE files SET folder_id = ?, original_name = ? WHERE id = ? AND user_id = ?`,
+		f.FolderID, f.OriginalName, f.ID, f.UserID)
 	if err != nil {
 		return err
 	}

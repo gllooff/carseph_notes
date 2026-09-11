@@ -4,12 +4,16 @@ import { api, post, showError, showMsg } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 
-const state = { files: [], kind: '', current: null, pdfDoc: null, pageNum: 1 };
+const state = { files: [], kind: '', current: null, pdfDoc: null, pageNum: 1, folders: [] };
 
 // ----- loading -----
 
 async function loadFiles() {
   try {
+    if (!state.folders.length) {
+      const fRes = await api('GET', '/api/folders');
+      state.folders = fRes.folders;
+    }
     const qs = state.kind ? `?kind=${state.kind}` : '';
     const res = await api('GET', '/api/files' + qs);
     state.files = res.files;
@@ -88,6 +92,7 @@ $('file-input').addEventListener('change', async (e) => {
     }
     showMsg('Uploaded.', 'ok');
     await loadFiles();
+    document.dispatchEvent(new CustomEvent('files-changed'));
   } catch (err) {
     showError(err);
   } finally {
@@ -109,7 +114,7 @@ for (const [id, kind] of [['tab-all', ''], ['tab-image', 'image'], ['tab-pdf', '
 
 // ----- viewer -----
 
-async function openViewer(f) {
+export async function openViewer(f) {
   state.current = f;
   $('viewer-overlay').hidden = false;
   $('viewer-name').textContent = f.original_name;
@@ -195,13 +200,126 @@ $('viewer-delete').addEventListener('click', async () => {
   closeViewer();
 });
 
+const viewerMoveBtn = document.createElement('button');
+viewerMoveBtn.className = 'kebab mini';
+viewerMoveBtn.title = 'File options';
+$('viewer-actions').appendChild(viewerMoveBtn);
+viewerMoveBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!state.current) return;
+  openFileMenu(state.current, viewerMoveBtn);
+});
+
 async function deleteFile(f) {
   if (!confirm(`Delete "${f.original_name}"? This cannot be undone.`)) return;
   try {
     await api('DELETE', `/api/files/${f.id}`);
     closeViewer();
     await loadFiles();
+    document.dispatchEvent(new CustomEvent('files-changed'));
   } catch (err) { showError(err); }
+}
+
+async function moveFileToFolder(f, folderId) {
+  try {
+    await api('PATCH', `/api/files/${f.id}`, { folder_id: folderId || null });
+    showMsg('Moved.', 'ok');
+    await loadFiles();
+    document.dispatchEvent(new CustomEvent('files-changed'));
+    if (state.current && state.current.id === f.id) {
+      state.current.folder_id = folderId || null;
+      $('viewer-name').textContent = f.original_name;
+    }
+  } catch (err) { showError(err); }
+}
+
+async function renameFile(f) {
+  const name = prompt('Rename file', f.original_name);
+  if (name === null || !name.trim()) return;
+  try {
+    const res = await api('PATCH', `/api/files/${f.id}`, { name: name.trim() });
+    f.original_name = res.original_name;
+    if (state.current && state.current.id === f.id) {
+      state.current.original_name = f.original_name;
+      $('viewer-name').textContent = f.original_name;
+    }
+    await loadFiles();
+    document.dispatchEvent(new CustomEvent('files-changed'));
+  } catch (err) { showError(err); }
+}
+
+let activeFileMenu = null;
+
+export function openFileMenu(f, anchor) {
+  closeFileMenu();
+  const menu = document.createElement('div');
+  menu.className = 'folder-menu';
+
+  const folders = state.folders || [];
+  const select = document.createElement('select');
+  select.style.cssText = 'width:100%;padding:.35rem .5rem;font-size:.85rem;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);margin:.25rem 0;';
+  const optNone = document.createElement('option');
+  optNone.value = '';
+  optNone.textContent = 'Unfiled';
+  select.appendChild(optNone);
+  for (const fo of folders) {
+    const o = document.createElement('option');
+    o.value = fo.id;
+    o.textContent = fo.name;
+    if (fo.id === f.folder_id) o.selected = true;
+    select.appendChild(o);
+  }
+  menu.appendChild(select);
+
+  const moveBtn = document.createElement('button');
+  moveBtn.className = 'mf-item';
+  moveBtn.textContent = 'Move';
+  moveBtn.addEventListener('click', () => {
+    const folderId = select.value || null;
+    closeFileMenu();
+    moveFileToFolder(f, folderId);
+  });
+  menu.appendChild(moveBtn);
+
+  const renameBtn = document.createElement('button');
+  renameBtn.className = 'mf-item';
+  renameBtn.textContent = 'Rename';
+  renameBtn.addEventListener('click', () => {
+    closeFileMenu();
+    renameFile(f);
+  });
+  menu.appendChild(renameBtn);
+
+  anchor.parentElement.appendChild(menu);
+  positionFileMenu(menu, anchor);
+  activeFileMenu = menu;
+  setTimeout(() => document.addEventListener('click', closeFileMenuOnClick, true), 0);
+}
+
+function positionFileMenu(menu, anchor) {
+  const r = anchor.getBoundingClientRect();
+  const pad = 4;
+  let top = r.bottom + pad;
+  const mR = menu.getBoundingClientRect();
+  let left = r.right - mR.width;
+  if (left > window.innerWidth - mR.width - pad) left = window.innerWidth - mR.width - pad;
+  if (left < pad) left = pad;
+  menu.style.top = top + 'px';
+  menu.style.left = left + 'px';
+}
+
+function closeFileMenu() {
+  if (activeFileMenu) {
+    activeFileMenu.remove();
+    activeFileMenu = null;
+  }
+  document.removeEventListener('click', closeFileMenuOnClick, true);
+}
+
+function closeFileMenuOnClick(e) {
+  if (activeFileMenu && !activeFileMenu.contains(e.target)) {
+    closeFileMenu();
+  }
 }
 
 // hook into the main router: re-load files view when it becomes visible

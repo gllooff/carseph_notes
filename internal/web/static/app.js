@@ -1,6 +1,7 @@
 // Main app: session bootstrap, router, notes CRUD (M2), settings.
 
 import { api, post, showError, showMsg } from './api.js';
+import { openViewer, openFileMenu } from './files.js';
 
 const { startRegistration } = window.SimpleWebAuthnBrowser;
 const { marked } = window.marked;
@@ -40,6 +41,7 @@ function renderMarkdown(text) {
 
 const state = {
   notes: [],
+  files: [],
   folders: [],
   tags: [],
   filter: {},          // {folder:'id'|'none', tag:'x', q:'y'}
@@ -80,8 +82,13 @@ async function refreshNotes() {
   if (state.filter.tag) params.set('tag', state.filter.tag);
   if (state.filter.q) params.set('q', state.filter.q);
   const qs = params.toString();
-  const res = await api('GET', '/api/notes' + (qs ? `?${qs}` : ''));
-  state.notes = res.notes;
+  const qsPart = qs ? `?${qs}` : '';
+  const [nRes, fRes] = await Promise.all([
+    api('GET', '/api/notes' + qsPart),
+    api('GET', '/api/files' + qsPart).catch(() => ({ files: [] })),
+  ]);
+  state.notes = nRes.notes;
+  state.files = fRes.files;
   renderNoteList();
 }
 
@@ -97,15 +104,26 @@ function renderSidebar() {
 
   for (const f of state.folders) {
     const li = document.createElement('li');
-    li.textContent = f.name;
+    li.dataset.folder = f.id;
+    if (state.filter.folder === f.id) li.classList.add('active');
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'fname';
+    nameSpan.textContent = f.name;
+    li.appendChild(nameSpan);
+
     const count = document.createElement('span');
     count.className = 'count';
     count.textContent = f.count;
     li.appendChild(count);
-    li.dataset.folder = f.id;
-    if (state.filter.folder === f.id) li.classList.add('active');
+
+    const menuBtn = document.createElement('button');
+    menuBtn.className = 'kebab';
+    menuBtn.title = 'Folder options';
+    menuBtn.addEventListener('click', (e) => { e.stopPropagation(); openFolderMenu(f, menuBtn); });
+    li.appendChild(menuBtn);
+
     li.addEventListener('click', () => { state.filter = { folder: f.id }; applyFilter(); });
-    li.addEventListener('contextmenu', (e) => { e.preventDefault(); deleteFolder(f); });
     fl.appendChild(li);
   }
 
@@ -136,30 +154,63 @@ async function applyFilter() {
 function renderNoteList() {
   const ul = $('note-list');
   ul.textContent = '';
-  if (!state.notes.length) {
+  const items = [
+    ...state.notes.map((n) => ({ kind: 'note', ts: n.updated_at, data: n })),
+    ...state.files.map((f) => ({ kind: 'file', ts: f.created_at, data: f })),
+  ].sort((a, b) => b.ts - a.ts);
+  if (!items.length) {
     const li = document.createElement('li');
     li.className = 'muted';
     li.textContent = state.filter.q || state.filter.tag || state.filter.folder
-      ? 'No notes match.' : 'No notes yet — create one!';
+      ? 'Nothing matches.' : 'No notes yet — create one!';
     ul.appendChild(li);
     return;
   }
-  for (const n of state.notes) {
+  for (const it of items) {
     const li = document.createElement('li');
-    li.dataset.id = n.id;
-    if (n.id === state.currentId) li.classList.add('active');
-    const t = document.createElement('span');
-    t.className = 'nt';
-    t.textContent = n.title;
-    const m = document.createElement('span');
-    m.className = 'nm';
-    const tags = n.tags && n.tags.length ? ` · ${n.tags.map((x) => '#' + x).join(' ')}` : '';
-    m.textContent = `${new Date(n.updated_at * 1000).toLocaleDateString()}${tags}`;
-    li.appendChild(t);
-    li.appendChild(m);
-    li.addEventListener('click', () => openNote(n.id));
+    if (it.kind === 'note') {
+      const n = it.data;
+      li.dataset.id = n.id;
+      if (n.id === state.currentId) li.classList.add('active');
+      const t = document.createElement('span');
+      t.className = 'nt';
+      t.textContent = n.title;
+      const m = document.createElement('span');
+      m.className = 'nm';
+      const tags = n.tags && n.tags.length ? ` · ${n.tags.map((x) => '#' + x).join(' ')}` : '';
+      m.textContent = `${new Date(n.updated_at * 1000).toLocaleDateString()}${tags}`;
+      li.appendChild(t);
+      li.appendChild(m);
+      li.addEventListener('click', () => openNote(n.id));
+    } else {
+      const f = it.data;
+      li.classList.add('file-item');
+      const t = document.createElement('span');
+      t.className = 'nt';
+      t.textContent = `${f.kind === 'image' ? '🖼' : '📄'} ${f.original_name}`;
+      const m = document.createElement('span');
+      m.className = 'nm';
+      m.textContent = `${new Date(f.created_at * 1000).toLocaleDateString()} · ${fmtSize(f.size)}`;
+      li.appendChild(t);
+      li.appendChild(m);
+      const kebab = document.createElement('button');
+      kebab.className = 'kebab';
+      kebab.title = 'File options';
+      kebab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openFileMenu(f, kebab);
+      });
+      li.appendChild(kebab);
+      li.addEventListener('click', () => openViewer(f));
+    }
     ul.appendChild(li);
   }
+}
+
+function fmtSize(n) {
+  if (n > 1 << 20) return (n / (1 << 20)).toFixed(1) + ' MB';
+  if (n > 1 << 10) return (n / (1 << 10)).toFixed(0) + ' KB';
+  return n + ' B';
 }
 
 // ----- editor -----
@@ -269,6 +320,69 @@ async function deleteFolder(f) {
   } catch (err) { showError(err); }
 }
 
+let activeFolderMenu = null;
+
+function openFolderMenu(f, anchor) {
+  closeFolderMenu();
+  const menu = document.createElement('div');
+  menu.className = 'folder-menu';
+  menu.innerHTML = `
+    <button class="mf-item" data-action="rename">Rename</button>
+    <button class="mf-item mf-danger" data-action="delete">Delete</button>
+  `;
+  menu.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === 'rename') {
+      closeFolderMenu();
+      renameFolder(f);
+    } else if (action === 'delete') {
+      closeFolderMenu();
+      deleteFolder(f);
+    }
+  });
+  anchor.parentElement.appendChild(menu);
+  positionFolderMenu(menu, anchor);
+  activeFolderMenu = menu;
+  setTimeout(() => document.addEventListener('click', closeFolderMenuOnClick, true), 0);
+}
+
+function positionFolderMenu(menu, anchor) {
+  const r = anchor.getBoundingClientRect();
+  const pad = 4;
+  let top = r.bottom + pad;
+  let left = r.left;
+  menu.style.maxWidth = '160px';
+  const mR = menu.getBoundingClientRect();
+  if (mR.right > window.innerWidth) left = window.innerWidth - mR.width - pad;
+  menu.style.top = top + 'px';
+  menu.style.left = left + 'px';
+}
+
+function closeFolderMenu() {
+  if (activeFolderMenu) {
+    activeFolderMenu.remove();
+    activeFolderMenu = null;
+  }
+  document.removeEventListener('click', closeFolderMenuOnClick, true);
+}
+
+function closeFolderMenuOnClick(e) {
+  if (activeFolderMenu && !activeFolderMenu.contains(e.target)) {
+    closeFolderMenu();
+  }
+}
+
+async function renameFolder(f) {
+  const name = prompt('Rename folder', f.name);
+  if (name === null || !name.trim()) return;
+  try {
+    await api('PATCH', `/api/folders/${f.id}`, { name: name.trim() });
+    await loadNotesView();
+  } catch (err) { showError(err); }
+}
+
 // ----- settings (unchanged from M1) -----
 
 async function loadSettings() {
@@ -315,7 +429,7 @@ function renderPasskeys(pks) {
     actionsTd.appendChild(renameBtn);
 
     const delBtn = document.createElement('button');
-    delBtn.className = 'linklike';
+    delBtn.className = 'linklike danger';
     delBtn.textContent = 'Delete';
     delBtn.addEventListener('click', async () => {
       if (!confirm('Delete this passkey?')) return;
@@ -350,7 +464,44 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
 
 // ----- wire notes UI -----
 
-document.getElementById('btn-new-note').addEventListener('click', newNote);
+let newNoteMenu = null;
+
+function toggleNewNoteMenu(anchor) {
+  if (newNoteMenu) { closeNewNoteMenu(); return; }
+  closeNewNoteMenu();
+  const menu = document.createElement('div');
+  menu.className = 'folder-menu';
+  const md = document.createElement('button');
+  md.className = 'mf-item';
+  md.textContent = 'Markdown note';
+  md.addEventListener('click', () => { closeNewNoteMenu(); newNote(); });
+  const up = document.createElement('button');
+  up.className = 'mf-item';
+  up.textContent = 'Upload file…';
+  up.addEventListener('click', () => { closeNewNoteMenu(); $('file-input').click(); });
+  menu.appendChild(md);
+  menu.appendChild(up);
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  const m = menu.getBoundingClientRect();
+  menu.style.top = (r.bottom + 4) + 'px';
+  menu.style.left = Math.max(4, r.right - m.width) + 'px';
+  newNoteMenu = menu;
+  setTimeout(() => document.addEventListener('click', closeNewNoteMenuOnClick, true), 0);
+}
+
+function closeNewNoteMenu() {
+  if (newNoteMenu) { newNoteMenu.remove(); newNoteMenu = null; }
+  document.removeEventListener('click', closeNewNoteMenuOnClick, true);
+}
+
+function closeNewNoteMenuOnClick(e) {
+  if (newNoteMenu && !newNoteMenu.contains(e.target) && e.target !== document.getElementById('btn-new-note')) {
+    closeNewNoteMenu();
+  }
+}
+
+document.getElementById('btn-new-note').addEventListener('click', (e) => toggleNewNoteMenu(e.currentTarget));
 document.getElementById('btn-save').addEventListener('click', saveNote);
 document.getElementById('btn-delete').addEventListener('click', async () => {
   if (!state.currentId) return;
@@ -370,6 +521,7 @@ document.getElementById('search').addEventListener('input', (e) => {
   refreshNotes().catch(showError);
 });
 document.getElementById('folder-form').addEventListener('submit', createFolder);
+document.addEventListener('files-changed', () => { refreshNotes().catch(showError); });
 
 function redirectLogin() { location.href = '/login'; }
 
