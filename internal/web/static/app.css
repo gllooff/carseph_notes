@@ -317,8 +317,7 @@ input.tags-input {
 }
 #note-title:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .editor-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: block;
   flex: 1;
   min-height: 55vh;
 }
@@ -329,7 +328,6 @@ input.tags-input {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: .9rem;
   line-height: 1.6;
-  border-right: 2px solid var(--border);
   background: var(--panel);
   color: var(--text);
 }

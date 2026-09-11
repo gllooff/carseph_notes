@@ -215,11 +215,24 @@ function fmtSize(n) {
 
 // ----- editor -----
 
+let editorMode = 'edit'; // 'edit' | 'preview'
+
+function setEditorMode(mode) {
+  editorMode = mode;
+  const editing = mode === 'edit';
+  $('note-body').hidden = !editing;
+  $('preview').hidden = editing;
+  $('btn-save').hidden = !editing;
+  $('btn-cancel').hidden = !editing;
+  $('btn-toggle-mode').textContent = editing ? 'Preview' : 'Edit';
+}
+
 async function openNote(id) {
   try {
     const n = await api('GET', `/api/notes/${id}`);
     state.currentId = n.id;
     $('editor-pane').hidden = false;
+    setEditorMode('preview');
     $('note-title').value = n.title;
     $('note-body').value = n.body || '';
     $('preview').innerHTML = renderMarkdown(n.body || '');
@@ -256,6 +269,7 @@ function closeEditor() {
 function newNote() {
   state.currentId = null;
   $('editor-pane').hidden = false;
+  setEditorMode('edit');
   $('note-title').value = '';
   $('note-title').focus();
   $('note-body').value = '';
@@ -507,6 +521,10 @@ function closeNewNoteMenuOnClick(e) {
 
 document.getElementById('btn-new-note').addEventListener('click', (e) => toggleNewNoteMenu(e.currentTarget));
 document.getElementById('btn-save').addEventListener('click', saveNote);
+document.getElementById('btn-cancel').addEventListener('click', () => { closeEditor(); });
+document.getElementById('btn-toggle-mode').addEventListener('click', () => {
+  setEditorMode(editorMode === 'edit' ? 'preview' : 'edit');
+});
 document.getElementById('btn-delete').addEventListener('click', async () => {
   if (!state.currentId) return;
   if (!confirm('Delete this note? This cannot be undone.')) return;
