@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -264,7 +265,9 @@ func (s *Server) getFileMeta(w http.ResponseWriter, r *http.Request, u *store.Us
 	writeJSON(w, http.StatusOK, filePayload(f, true))
 }
 
-// updateFile handles PATCH /api/files/{id} {folder_id?, tags?}.
+// updateFile handles PATCH /api/files/{id} {folder_id?, tags?, rotation?}.
+// A non-zero rotation bakes the image bytes (PNG/JPEG/GIF only) and resets the
+// stored rotation to 0.
 func (s *Server) updateFile(w http.ResponseWriter, r *http.Request, u *store.User) {
 	id := r.PathValue("id")
 	f, err := s.st.FileByID(r.Context(), u.ID, id)
@@ -307,7 +310,18 @@ func (s *Server) updateFile(w http.ResponseWriter, r *http.Request, u *store.Use
 		f.Tags = nil
 	}
 	if req.Rotation != nil {
-		f.Rotation = *req.Rotation
+		if *req.Rotation != 0 {
+			if f.Kind != "image" || !rotatableMIME[f.Mime] {
+				writeError(w, http.StatusBadRequest, "cannot_rotate",
+					"this image type cannot be rotated by the server; the browser must re-encode it")
+				return
+			}
+			if err := s.rotateFileInPlace(r.Context(), u.ID, f, *req.Rotation); err != nil {
+				writeError(w, http.StatusInternalServerError, "internal", "could not rotate image")
+				return
+			}
+		}
+		f.Rotation = 0
 	}
 	if err := s.st.UpdateFile(r.Context(), f); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal", "could not update file")
@@ -315,6 +329,92 @@ func (s *Server) updateFile(w http.ResponseWriter, r *http.Request, u *store.Use
 	}
 	f2, _ := s.st.FileByID(r.Context(), u.ID, id)
 	writeJSON(w, http.StatusOK, filePayload(f2, true))
+}
+
+// rotateFileInPlace rotates the stored image bytes by deg degrees clockwise and
+// refreshes the derived metadata (size, sha256). It does not touch the DB.
+func (s *Server) rotateFileInPlace(ctx context.Context, userID string, f *store.File, deg int) error {
+	fh, _, err := s.blobs.OpenFile(userID, f.Filename)
+	if err != nil {
+		return err
+	}
+	data, err := io.ReadAll(fh)
+	fh.Close()
+	if err != nil {
+		return err
+	}
+	rotated, err := rotateImageBytes(f.Mime, data, deg)
+	if err != nil {
+		return err
+	}
+	if err := s.blobs.WriteFile(userID, f.Filename, rotated); err != nil {
+		return err
+	}
+	sum := sha256.Sum256(rotated)
+	f.Size = int64(len(rotated))
+	f.SHA256 = hex.EncodeToString(sum[:])
+	return nil
+}
+
+// replaceFileBytes handles PUT /api/files/{id}/raw. It replaces the stored
+// bytes with a client-transcoded image (used when the server cannot rotate the
+// original format, e.g. WebP/AVIF).
+func (s *Server) replaceFileBytes(w http.ResponseWriter, r *http.Request, u *store.User) {
+	id := r.PathValue("id")
+	f, err := s.st.FileByID(r.Context(), u.ID, id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not_found", "file not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal", "could not load file")
+		return
+	}
+	maxBytes := int64(s.cfg.MaxUploadMB) << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes+1)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "bad_upload", "could not read upload")
+		return
+	}
+	if int64(len(data)) > maxBytes {
+		writeError(w, http.StatusRequestEntityTooLarge, "too_large", "file exceeds upload limit")
+		return
+	}
+	head := data
+	if len(head) > 512 {
+		head = head[:512]
+	}
+	ct, ok := sniffAllowed(head, http.DetectContentType(head))
+	if !ok || allowedMIME[ct] != "image" {
+		writeError(w, http.StatusUnsupportedMediaType, "bad_type",
+			"only image files can replace an existing file")
+		return
+	}
+
+	oldName := f.Filename
+	newName := id + "." + mimeExt(ct)
+	f.Mime = ct
+	f.Filename = newName
+	f.Size = int64(len(data))
+	sum := sha256.Sum256(data)
+	f.SHA256 = hex.EncodeToString(sum[:])
+	f.Rotation = 0
+
+	if err := s.blobs.WriteFile(u.ID, newName, data); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal", "could not store file")
+		return
+	}
+	if err := s.st.UpdateFile(r.Context(), f); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal", "could not update file")
+		return
+	}
+	if newName != oldName {
+		if err := s.blobs.DeleteFile(u.ID, oldName); err != nil {
+			slogWarn("replace file: delete old blob", err)
+		}
+	}
+	writeJSON(w, http.StatusOK, filePayload(f, true))
 }
 
 // deleteFile handles DELETE /api/files/{id}.

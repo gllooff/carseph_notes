@@ -72,6 +72,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/files", s.auth(s.uploadFile))
 	mux.HandleFunc("GET /api/files/{id}", s.auth(s.getFileMeta))
 	mux.HandleFunc("GET /api/files/{id}/raw", s.auth(s.serveFileRaw))
+	mux.HandleFunc("PUT /api/files/{id}/raw", s.auth(s.replaceFileBytes))
 	mux.HandleFunc("PATCH /api/files/{id}", s.auth(s.updateFile))
 	mux.HandleFunc("DELETE /api/files/{id}", s.auth(s.deleteFile))
 

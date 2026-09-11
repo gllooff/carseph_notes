@@ -134,7 +134,8 @@ func (s *Store) FileByID(ctx context.Context, userID, id string) (*File, error) 
 	return f, nil
 }
 
-// UpdateFile moves a file between folders, renames it, and/or sets tags.
+// UpdateFile updates a file's metadata. Rotation is always reset to 0 after a
+// save because it is baked into the stored bytes instead.
 func (s *Store) UpdateFile(ctx context.Context, f *File) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -142,8 +143,11 @@ func (s *Store) UpdateFile(ctx context.Context, f *File) error {
 	}
 	defer tx.Rollback()
 	res, err := tx.ExecContext(ctx,
-		`UPDATE files SET folder_id = ?, original_name = ?, rotation = ? WHERE id = ? AND user_id = ?`,
-		f.FolderID, f.OriginalName, f.Rotation, f.ID, f.UserID)
+		`UPDATE files SET folder_id = ?, original_name = ?, rotation = ?,
+		        mime = ?, size = ?, sha256 = ?, filename = ?
+		 WHERE id = ? AND user_id = ?`,
+		f.FolderID, f.OriginalName, f.Rotation,
+		f.Mime, f.Size, f.SHA256, f.Filename, f.ID, f.UserID)
 	if err != nil {
 		return err
 	}

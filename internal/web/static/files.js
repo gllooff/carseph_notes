@@ -170,12 +170,60 @@ $('viewer-rotate-right').addEventListener('click', () => {
 });
 $('viewer-save-rot').addEventListener('click', async () => {
   if (!state.current) return;
+  const deg = ((state.imgRot % 360) + 360) % 360;
+  if (deg === 0) { showMsg('Rotation saved.', 'ok'); return; }
   try {
-    await api('PATCH', `/api/files/${state.current.id}`, { rotation: state.imgRot });
-    state.current.rotation = state.imgRot;
+    let updated;
+    if (SERVER_ROTATABLE.includes(state.current.mime)) {
+      updated = await api('PATCH', `/api/files/${state.current.id}`, { rotation: deg });
+    } else {
+      const blob = await transcodeImage(state.current, deg);
+      updated = await replaceFileBytes(state.current, blob);
+    }
+    state.current = updated;
+    state.imgRot = 0;
+    $('viewer-img').src = updated.url + '?t=' + Date.now();
+    applyImageTransform();
     showMsg('Rotation saved.', 'ok');
+    document.dispatchEvent(new CustomEvent('files-changed'));
   } catch (err) { showError(err); }
 });
+
+const SERVER_ROTATABLE = ['image/png', 'image/jpeg', 'image/gif'];
+
+async function transcodeImage(f, deg) {
+  const res = await fetch(f.url);
+  if (!res.ok) throw new Error('Could not load image to rotate: HTTP ' + res.status);
+  const bitmap = await createImageBitmap(await res.blob());
+  const w = (deg % 180 === 0) ? bitmap.width : bitmap.height;
+  const h = (deg % 180 === 0) ? bitmap.height : bitmap.width;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate(deg * Math.PI / 180);
+  ctx.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2);
+  bitmap.close();
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((b) => b ? resolve(b) : reject(new Error('Could not re-encode image')), 'image/png');
+  });
+}
+
+async function replaceFileBytes(f, blob) {
+  const res = await fetch(`/api/files/${f.id}/raw`, {
+    method: 'PUT',
+    credentials: 'same-origin',
+    body: blob,
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* non-JSON */ }
+  if (!res.ok) {
+    const msg = data && data.error ? data.error.message : `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
 
 function closeViewer() {
   $('viewer-overlay').hidden = true;
