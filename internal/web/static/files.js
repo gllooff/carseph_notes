@@ -2,9 +2,18 @@
 
 import { api, post, showError, showMsg } from './api.js';
 
+const { marked } = window.marked;
+const DOMPurify = window.DOMPurify;
+
+marked.setOptions({ breaks: true, gfm: true });
+
 const $ = (id) => document.getElementById(id);
 
 const state = { current: null, pdfDoc: null, pageNum: 1, zoom: 1, imgZoom: 1, imgRot: 0 };
+
+function renderMarkdown(text) {
+  return DOMPurify.sanitize(marked.parse(text || ''));
+}
 
 // ----- upload -----
 
@@ -57,7 +66,9 @@ export async function openViewer(f) {
   $('viewer-name').textContent = f.original_name;
   $('viewer-img').hidden = f.kind !== 'image';
   const isPdf = f.kind === 'pdf';
+  const isMd = f.kind === 'markdown';
   $('viewer-pdf').hidden = !isPdf;
+  $('viewer-markdown').hidden = !isMd;
   setImageControlsVisible(f.kind === 'image');
   $('va-pdf-zoom').hidden = !isPdf;
   if (f.kind === 'image') {
@@ -65,6 +76,16 @@ export async function openViewer(f) {
     state.imgRot = f.rotation || 0;
     $('viewer-img').src = f.url;
     applyImageTransform();
+    return;
+  }
+  if (isMd) {
+    try {
+      const res = await fetch(f.url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      $('viewer-markdown').innerHTML = renderMarkdown(await res.text());
+    } catch (err) {
+      showError(new Error('Could not open Markdown: ' + err.message));
+    }
     return;
   }
   // PDF via PDF.js
@@ -159,6 +180,8 @@ $('viewer-save-rot').addEventListener('click', async () => {
 function closeViewer() {
   $('viewer-overlay').hidden = true;
   $('viewer-img').src = '';
+  $('viewer-markdown').hidden = true;
+  $('viewer-markdown').innerHTML = '';
   state.pdfDoc = null;
   state.current = null;
 }
@@ -349,7 +372,7 @@ export function openFileMenu(f, anchor) {
   setTimeout(() => document.addEventListener('click', closeFileMenuOnClick, true), 0);
 }
 
-function positionFileMenu(menu, anchor) {
+export function positionFileMenu(menu, anchor) {
   const r = anchor.getBoundingClientRect();
   const pad = 4;
   let top = r.bottom + pad;

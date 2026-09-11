@@ -98,6 +98,38 @@ func TestFilesUploadFlow(t *testing.T) {
 		t.Fatalf("expected pdf kind: %s", data)
 	}
 
+	// Valid Markdown upload (filename becomes the title).
+	res, data = upload(t, c, "notes.md", []byte("# Hello\n\nSome **markdown**."), nil)
+	wantStatus(t, res, data, http.StatusCreated, "markdown upload")
+	var mdFile struct {
+		ID           string `json:"id"`
+		Kind         string `json:"kind"`
+		Mime         string `json:"mime"`
+		OriginalName string `json:"original_name"`
+	}
+	if err := mustUnmarshal(data, &mdFile); err != nil {
+		t.Fatal(err)
+	}
+	if mdFile.Kind != "markdown" || mdFile.Mime != "text/plain" || mdFile.OriginalName != "notes.md" {
+		t.Fatalf("unexpected markdown payload: %s", data)
+	}
+
+	// Valid .markdown extension too.
+	res, data = upload(t, c, "draft.markdown", []byte("draft"), nil)
+	wantStatus(t, res, data, http.StatusCreated, "markdown ext upload")
+
+	// Rejected: .md extension but binary content.
+	res, _ = upload(t, c, "evil.md", bytes.Repeat([]byte{0x00, 0x01, 0x02}, 400), nil)
+	if res.StatusCode != http.StatusUnsupportedMediaType {
+		t.Fatalf("binary as .md: got %d, want 415", res.StatusCode)
+	}
+
+	// Rejected: plain text without a markdown extension.
+	res, _ = upload(t, c, "readme.txt", []byte("just some text"), nil)
+	if res.StatusCode != http.StatusUnsupportedMediaType {
+		t.Fatalf("txt upload: got %d, want 415", res.StatusCode)
+	}
+
 	// Rejected: text file pretending to be PNG (magic-byte mismatch).
 	res, data = upload(t, c, "evil.png", []byte("alert('xss')"), nil)
 	wantStatus(t, res, data, http.StatusUnsupportedMediaType, "fake png")
@@ -116,6 +148,11 @@ func TestFilesUploadFlow(t *testing.T) {
 	wantStatus(t, res, data, http.StatusOK, "list pdfs")
 	if !contains(string(data), "doc.pdf") || contains(string(data), "pic.png") {
 		t.Fatalf("kind filter wrong: %s", data)
+	}
+	res, data = c.do("GET", "/api/files?kind=markdown", nil)
+	wantStatus(t, res, data, http.StatusOK, "list markdown")
+	if !contains(string(data), "notes.md") || !contains(string(data), "draft.markdown") || contains(string(data), "doc.pdf") {
+		t.Fatalf("markdown kind filter wrong: %s", data)
 	}
 
 	// Raw serving with correct content type + inline disposition.

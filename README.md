@@ -10,8 +10,9 @@ strict per-user isolation.
 
 - **Markdown notes** — create, edit (textarea + live sanitized preview),
   render, delete. Bodies are stored as real `.md` files on disk.
-- **Images & PDFs** — upload (magic-byte validated), view in a lightbox /
-  embedded PDF.js viewer with page navigation, `?download=1` downloads.
+- **Images, PDFs & Markdown files** — upload (magic-byte validated; Markdown
+  requires a `.md`/`.markdown` name), view in a lightbox / embedded PDF.js
+  viewer / rendered Markdown pane, `?download=1` downloads.
 - **Organization** — flat folders and tags on notes *and* files, title search.
 - **Copy Markdown snippet** — every image offers a `![](url)` snippet for
   embedding into notes.
@@ -95,7 +96,8 @@ Key files: `deploy/notes.service` (hardened systemd unit),
 - CSRF: `Origin` check on all mutating requests.
 - Strict CSP (`default-src 'self'`), no inline JS, all third-party JS vendored.
 - Markdown is sanitized with DOMPurify before rendering; uploads are
-  extension + magic-byte validated (PNG/JPEG/GIF/WebP/AVIF/PDF only, 25 MB cap).
+  extension + magic-byte validated (PNG/JPEG/GIF/WebP/AVIF/PDF, plus Markdown
+  `.md`/`.markdown` text, 25 MB cap).
 - Auth endpoints are rate-limited per IP (30/min).
 - Passkeys are the only credential: **losing all of them loses the account**
   (accepted trade-off; no server-side recovery).

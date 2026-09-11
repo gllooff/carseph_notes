@@ -36,6 +36,7 @@ var allowedMIME = map[string]string{
 	"image/webp":      "image",
 	"image/avif":      "image",
 	"application/pdf": "pdf",
+	"text/plain":      "markdown",
 }
 
 // magic prefixes for the sniffed content types we accept.
@@ -77,6 +78,11 @@ func sniffAllowed(head []byte, contentType string) (string, bool) {
 		if brand == "avif" || brand == "avis" {
 			return ct, true
 		}
+	}
+	// text/plain (Markdown): no magic bytes; DetectContentType already
+	// verified the data is valid text (no control characters).
+	if ct == "text/plain" {
+		return ct, true
 	}
 	return "", false
 }
@@ -165,10 +171,17 @@ func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request, u *store.Use
 		head = head[:512]
 	}
 	sniffed := http.DetectContentType(head)
-	_, ok := sniffAllowed(head, sniffed)
+	ct, ok := sniffAllowed(head, sniffed)
 	if !ok {
 		writeError(w, http.StatusUnsupportedMediaType, "bad_type",
-			"only PNG, JPEG, GIF, WebP, AVIF images and PDF files are allowed")
+			"only PNG, JPEG, GIF, WebP, AVIF images, PDF files and Markdown (.md) files are allowed")
+		return
+	}
+	// Markdown has no magic bytes; require a .md/.markdown extension to
+	// avoid accepting arbitrary text files.
+	if ct == "text/plain" && !isMarkdownName(header.Filename) {
+		writeError(w, http.StatusUnsupportedMediaType, "bad_type",
+			"markdown files must use a .md or .markdown extension")
 		return
 	}
 
@@ -178,12 +191,12 @@ func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request, u *store.Use
 	f := &store.File{
 		ID:           id,
 		UserID:       u.ID,
-		Kind:         allowedMIME[sniffed],
+		Kind:         allowedMIME[ct],
 		OriginalName: sanitizeFilename(header.Filename),
-		Mime:         sniffed,
+		Mime:         ct,
 		Size:         int64(len(data)),
 		SHA256:       hex.EncodeToString(sum[:]),
-		Filename:     id + "." + mimeExt(sniffed),
+		Filename:     id + "." + mimeExt(ct),
 	}
 	if tagsStr := r.FormValue("tags"); tagsStr != "" {
 		f.Tags = splitTags(tagsStr)
@@ -342,8 +355,16 @@ func mimeExt(mime string) string {
 		return "avif"
 	case "application/pdf":
 		return "pdf"
+	case "text/plain":
+		return "md"
 	}
 	return "bin"
+}
+
+// isMarkdownName reports whether a multipart filename looks like Markdown.
+func isMarkdownName(name string) bool {
+	lower := strings.ToLower(name)
+	return strings.HasSuffix(lower, ".md") || strings.HasSuffix(lower, ".markdown")
 }
 
 func sanitizeFilename(name string) string {

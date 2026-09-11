@@ -87,6 +87,9 @@ async function openNote(id) {
 function initNewNote() {
   state.currentId = null;
   $('btn-delete').hidden = true;
+  $('btn-save-title').hidden = true;
+  $('btn-save-folder').hidden = true;
+  $('btn-save-tags').hidden = true;
   setEditorMode('edit');
   $('note-title').value = '';
   $('note-title').focus();
@@ -111,9 +114,39 @@ async function saveNote() {
     } else {
       const n = await post('/api/notes', payload);
       state.currentId = n.id;
+      $('btn-save-title').hidden = false;
+      $('btn-save-folder').hidden = false;
+      $('btn-save-tags').hidden = false;
       history.replaceState(null, '', `/note/${n.id}`);
     }
     showMsg('Saved.', 'ok');
+  } catch (err) { showError(err); }
+}
+
+async function saveTitle() {
+  if (!state.currentId) return;
+  const title = $('note-title').value.trim() || 'Untitled';
+  try {
+    await api('PUT', `/api/notes/${state.currentId}`, { title });
+    document.title = `${title} — Carseph Notes`;
+    showMsg('Title saved.', 'ok');
+  } catch (err) { showError(err); }
+}
+
+async function saveFolder() {
+  if (!state.currentId) return;
+  try {
+    await api('PUT', `/api/notes/${state.currentId}`, { folder_id: $('note-folder').value || null });
+    showMsg('Folder saved.', 'ok');
+  } catch (err) { showError(err); }
+}
+
+async function saveTags() {
+  if (!state.currentId) return;
+  const tags = $('note-tags').value.split(',').map((s) => s.trim()).filter(Boolean);
+  try {
+    await api('PUT', `/api/notes/${state.currentId}`, { tags });
+    showMsg('Tags saved.', 'ok');
   } catch (err) { showError(err); }
 }
 
@@ -129,6 +162,15 @@ async function deleteCurrentNote() {
 // ----- wire UI -----
 
 document.getElementById('btn-save').addEventListener('click', saveNote);
+document.getElementById('btn-save-title').addEventListener('click', saveTitle);
+document.getElementById('note-title').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); saveTitle(); }
+});
+document.getElementById('btn-save-folder').addEventListener('click', saveFolder);
+document.getElementById('btn-save-tags').addEventListener('click', saveTags);
+document.getElementById('note-tags').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); saveTags(); }
+});
 document.getElementById('btn-cancel').addEventListener('click', () => { location.href = '/'; });
 document.getElementById('btn-toggle-mode').addEventListener('click', () => {
   setEditorMode(editorMode === 'edit' ? 'preview' : 'edit');

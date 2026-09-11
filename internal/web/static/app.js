@@ -1,7 +1,7 @@
 // Main app: session bootstrap, router, notes CRUD (M2), settings.
 
 import { api, post, showError, showMsg } from './api.js';
-import { openViewer, openFileMenu } from './files.js';
+import { openViewer, openFileMenu, positionFileMenu } from './files.js';
 
 const { startRegistration } = window.SimpleWebAuthnBrowser;
 
@@ -36,6 +36,9 @@ const state = {
   tags: [],
   filter: {},          // {folder:'id'|'none', tag:'x', q:'y'}
   dirty: false,
+  selecting: false,
+  selected: new Set(), // "note:{id}" | "file:{id}"
+  sort: 'date-desc',   // 'date-desc'|'date-asc'|'name-asc'|'name-desc'
 };
 
 const $ = (id) => document.getElementById(id);
@@ -130,6 +133,7 @@ function renderSidebar() {
     tl.appendChild(li);
   }
   $('list-title').textContent = state.filter.tag ? `#${state.filter.tag}` : folderLabel();
+  updateSelectBar();
 }
 
 async function applyFilter() {
@@ -145,20 +149,57 @@ function renderNoteList() {
   const items = [
     ...state.notes.map((n) => ({ kind: 'note', ts: n.updated_at, data: n })),
     ...state.files.map((f) => ({ kind: 'file', ts: f.created_at, data: f })),
-  ].sort((a, b) => b.ts - a.ts);
+  ];
+  if (state.sort === 'name-asc' || state.sort === 'name-desc') {
+    items.sort((a, b) => {
+      const na = a.kind === 'note' ? a.data.title : a.data.original_name;
+      const nb = b.kind === 'note' ? b.data.title : b.data.original_name;
+      const r = na.localeCompare(nb);
+      return state.sort === 'name-asc' ? r : -r;
+    });
+  } else {
+    items.sort((a, b) => {
+      const r = b.ts - a.ts;
+      return state.sort === 'date-desc' ? r : -r;
+    });
+  }
   if (!items.length) {
     const li = document.createElement('li');
     li.className = 'muted';
     li.textContent = state.filter.q || state.filter.tag || state.filter.folder
       ? 'Nothing matches.' : 'No notes yet — create one!';
     ul.appendChild(li);
+    updateSelectBar();
     return;
   }
   for (const it of items) {
     const li = document.createElement('li');
-    if (it.kind === 'note') {
+    if (state.selecting) {
+      const key = `${it.kind}:${it.data.id}`;
+      const isSel = state.selected.has(key);
+      li.classList.add('selectable');
+      if (isSel) li.classList.add('selected');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = isSel;
+      cb.className = 'item-check';
+      li.appendChild(cb);
+      const t = document.createElement('span');
+      t.className = 'nt';
+      t.textContent = it.kind === 'note' ? it.data.title
+        : `${it.data.kind === 'image' ? '🖼' : it.data.kind === 'markdown' ? '📝' : '📄'} ${it.data.original_name}`;
+      li.appendChild(t);
+      li.addEventListener('click', () => {
+        if (state.selected.has(key)) state.selected.delete(key);
+        else state.selected.add(key);
+        li.classList.toggle('selected', state.selected.has(key));
+        cb.checked = state.selected.has(key);
+        updateSelectBar();
+      });
+    } else if (it.kind === 'note') {
       const n = it.data;
       li.dataset.id = n.id;
+      li.classList.add('file-item');
       const t = document.createElement('span');
       t.className = 'nt';
       t.textContent = n.title;
@@ -168,13 +209,22 @@ function renderNoteList() {
       m.textContent = `${new Date(n.updated_at * 1000).toLocaleDateString()}${tags}`;
       li.appendChild(t);
       li.appendChild(m);
+      const kebab = document.createElement('button');
+      kebab.className = 'kebab';
+      kebab.title = 'Note options';
+      kebab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openNoteMenu(n, kebab);
+      });
+      li.appendChild(kebab);
       li.addEventListener('click', () => { location.href = `/note/${n.id}`; });
     } else {
       const f = it.data;
       li.classList.add('file-item');
       const t = document.createElement('span');
       t.className = 'nt';
-      t.textContent = `${f.kind === 'image' ? '🖼' : '📄'} ${f.original_name}`;
+      const icon = f.kind === 'image' ? '🖼' : f.kind === 'markdown' ? '📝' : '📄';
+      t.textContent = `${icon} ${f.original_name}`;
       const m = document.createElement('span');
       m.className = 'nm';
       m.textContent = `${new Date(f.created_at * 1000).toLocaleDateString()} · ${fmtSize(f.size)}`;
@@ -192,12 +242,106 @@ function renderNoteList() {
     }
     ul.appendChild(li);
   }
+  updateSelectBar();
 }
 
 function fmtSize(n) {
   if (n > 1 << 20) return (n / (1 << 20)).toFixed(1) + ' MB';
   if (n > 1 << 10) return (n / (1 << 10)).toFixed(0) + ' KB';
   return n + ' B';
+}
+
+function updateSelectBar() {
+  $('btn-new-note').hidden = state.selecting;
+  $('btn-select').hidden = state.selecting;
+  $('btn-delete-selected').hidden = !state.selecting;
+  $('btn-cancel-select').hidden = !state.selecting;
+  const n = state.selected.size;
+  $('btn-delete-selected').textContent = n ? `Delete (${n})` : 'Delete';
+  $('list-title').textContent = state.selecting
+    ? (n ? `${n} selected` : 'Select items…')
+    : folderLabel();
+  updateSortButton();
+}
+
+const SORT_LABELS = {
+  'date-desc': 'Newest',
+  'date-asc': 'Oldest',
+  'name-asc': 'A–Z',
+  'name-desc': 'Z–A',
+};
+
+function updateSortButton() {
+  $('btn-sort').textContent = `Sort: ${SORT_LABELS[state.sort]}`;
+}
+
+let activeSortMenu = null;
+
+function toggleSortMenu(anchor) {
+  if (activeSortMenu) { closeSortMenu(); return; }
+  const menu = document.createElement('div');
+  menu.className = 'folder-menu sort-menu';
+  const opts = [
+    { id: 'date-desc', label: 'Date modified · newest' },
+    { id: 'date-asc', label: 'Date modified · oldest' },
+    { id: 'name-asc', label: 'Name · A–Z' },
+    { id: 'name-desc', label: 'Name · Z–A' },
+  ];
+  for (const o of opts) {
+    const btn = document.createElement('button');
+    btn.className = 'mf-item' + (state.sort === o.id ? ' checked' : '');
+    btn.textContent = o.label;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeSortMenu();
+      if (state.sort === o.id) return;
+      state.sort = o.id;
+      renderNoteList();
+    });
+    menu.appendChild(btn);
+  }
+  anchor.parentElement.appendChild(menu);
+  positionFileMenu(menu, anchor);
+  activeSortMenu = menu;
+  setTimeout(() => document.addEventListener('click', closeSortMenuOnClick, true), 0);
+}
+
+function closeSortMenu() {
+  if (activeSortMenu) {
+    activeSortMenu.remove();
+    activeSortMenu = null;
+  }
+  document.removeEventListener('click', closeSortMenuOnClick, true);
+}
+
+function closeSortMenuOnClick(e) {
+  if (activeSortMenu && !activeSortMenu.contains(e.target)) {
+    closeSortMenu();
+  }
+}
+
+function toggleSelectMode() {
+  state.selecting = !state.selecting;
+  state.selected.clear();
+  renderNoteList();
+}
+
+async function deleteSelected() {
+  const n = state.selected.size;
+  if (!n) return;
+  if (!confirm(`Delete ${n} item${n > 1 ? 's' : ''}? This cannot be undone.`)) return;
+  try {
+    for (const key of state.selected) {
+      const sep = key.indexOf(':');
+      const kind = key.slice(0, sep);
+      const id = key.slice(sep + 1);
+      if (kind === 'note') await api('DELETE', `/api/notes/${id}`);
+      else await api('DELETE', `/api/files/${id}`);
+    }
+    state.selected.clear();
+    state.selecting = false;
+    await loadNotesView();
+  } catch (err) { showError(err); }
 }
 
 // ----- folders -----
@@ -274,6 +418,150 @@ function closeFolderMenuOnClick(e) {
   if (activeFolderMenu && !activeFolderMenu.contains(e.target)) {
     closeFolderMenu();
   }
+}
+
+let activeNoteMenu = null;
+
+function openNoteMenu(n, anchor) {
+  closeNoteMenu();
+  const menu = document.createElement('div');
+  menu.className = 'folder-menu';
+
+  const refBtn = document.createElement('button');
+  refBtn.className = 'mf-item';
+  refBtn.textContent = 'Reference';
+  refBtn.title = 'Copy a markdown note link to the clipboard';
+  refBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    closeNoteMenu();
+    const md = `[${n.title}](/note/${n.id})`;
+    try {
+      await navigator.clipboard.writeText(md);
+      showMsg('Markdown link copied.', 'ok');
+    } catch {
+      prompt('Copy this snippet:', md);
+    }
+  });
+  menu.appendChild(refBtn);
+
+  const moveBtn = document.createElement('button');
+  moveBtn.className = 'mf-item';
+  moveBtn.textContent = 'Move';
+  moveBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeNoteMenu();
+    openNoteMoveDialog(n);
+  });
+  menu.appendChild(moveBtn);
+
+  const renameBtn = document.createElement('button');
+  renameBtn.className = 'mf-item';
+  renameBtn.textContent = 'Rename';
+  renameBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeNoteMenu();
+    renameNote(n);
+  });
+  menu.appendChild(renameBtn);
+
+  anchor.parentElement.appendChild(menu);
+  positionFileMenu(menu, anchor);
+  activeNoteMenu = menu;
+  setTimeout(() => document.addEventListener('click', closeNoteMenuOnClick, true), 0);
+}
+
+function closeNoteMenu() {
+  if (activeNoteMenu) {
+    activeNoteMenu.remove();
+    activeNoteMenu = null;
+  }
+  document.removeEventListener('click', closeNoteMenuOnClick, true);
+}
+
+function closeNoteMenuOnClick(e) {
+  if (activeNoteMenu && !activeNoteMenu.contains(e.target)) {
+    closeNoteMenu();
+  }
+}
+
+async function renameNote(n) {
+  const name = prompt('Rename note', n.title);
+  if (name === null || !name.trim()) return;
+  try {
+    await api('PUT', `/api/notes/${n.id}`, { title: name.trim() });
+    await loadNotesView();
+  } catch (err) { showError(err); }
+}
+
+async function moveNoteToFolder(n, folderId) {
+  try {
+    await api('PUT', `/api/notes/${n.id}`, { folder_id: folderId || null });
+    showMsg('Moved.', 'ok');
+    await loadNotesView();
+  } catch (err) { showError(err); }
+}
+
+async function openNoteMoveDialog(n) {
+  let folders;
+  try {
+    const res = await api('GET', '/api/folders');
+    folders = res.folders;
+  } catch (err) { showError(err); return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+
+  const h3 = document.createElement('h3');
+  h3.textContent = `Move "${n.title}" to…`;
+  box.appendChild(h3);
+
+  const list = document.createElement('div');
+  list.className = 'modal-folder-list';
+  const opts = [{ id: '', name: 'Unfiled' }, ...(folders || [])];
+  let selected = n.folder_id || '';
+  for (const o of opts) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mf-folder-opt' + (o.id === selected ? ' selected' : '');
+    btn.textContent = o.name;
+    btn.addEventListener('click', () => {
+      selected = o.id;
+      for (const el of list.querySelectorAll('.mf-folder-opt')) {
+        el.classList.toggle('selected', el === btn);
+      }
+    });
+    list.appendChild(btn);
+  }
+  box.appendChild(list);
+
+  const row = document.createElement('div');
+  row.className = 'modal-actions';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'secondary';
+  cancel.textContent = 'Cancel';
+  const move = document.createElement('button');
+  move.className = 'primary';
+  move.textContent = 'Move';
+  row.append(cancel, move);
+  box.appendChild(row);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => {
+    document.removeEventListener('keydown', onKey);
+    overlay.remove();
+  };
+  cancel.addEventListener('click', close);
+  move.addEventListener('click', () => {
+    close();
+    moveNoteToFolder(n, selected || null);
+  });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', onKey);
 }
 
 async function renameFolder(f) {
@@ -415,6 +703,10 @@ function closeNewNoteMenuOnClick(e) {
 }
 
 document.getElementById('btn-new-note').addEventListener('click', (e) => toggleNewNoteMenu(e.currentTarget));
+document.getElementById('btn-sort').addEventListener('click', (e) => toggleSortMenu(e.currentTarget));
+document.getElementById('btn-select').addEventListener('click', toggleSelectMode);
+document.getElementById('btn-cancel-select').addEventListener('click', toggleSelectMode);
+document.getElementById('btn-delete-selected').addEventListener('click', deleteSelected);
 document.getElementById('search').addEventListener('input', (e) => {
   state.filter.q = e.target.value.trim() || undefined;
   if (!state.filter.q) delete state.filter.q;

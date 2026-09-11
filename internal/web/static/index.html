@@ -39,7 +39,13 @@
       <div class="note-list-col">
         <div class="list-head">
           <span id="list-title">All notes</span>
-          <button id="btn-new-note" class="mini">New note</button>
+          <div class="list-actions">
+            <button id="btn-sort" class="mini">Sort: Newest</button>
+            <button id="btn-select" class="mini">Select</button>
+            <button id="btn-delete-selected" class="mini danger" hidden>Delete</button>
+            <button id="btn-cancel-select" class="mini" hidden>Cancel</button>
+            <button id="btn-new-note" class="mini">New note</button>
+          </div>
         </div>
         <ul id="note-list" class="note-list"></ul>
       </div>
@@ -60,7 +66,7 @@
     </div>
   </section>
 
-  <input id="file-input" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,.avif,.pdf" hidden>
+  <input id="file-input" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,.avif,.pdf,.md,.markdown" hidden>
 
   <div id="viewer-overlay" class="viewer-overlay" hidden>
     <div class="viewer-bar">
@@ -94,6 +100,7 @@
     </div>
     <img id="viewer-img" alt="">
     <canvas id="viewer-pdf" hidden></canvas>
+    <div id="viewer-markdown" class="md-body" hidden></div>
   </div>
 </main>
 

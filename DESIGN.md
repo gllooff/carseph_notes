@@ -6,7 +6,8 @@ A self-hosted web app for storing personal notes and documents.
   * **Markdown notes** — create, edit, view (rendered), delete.
   * **Images** — upload, view (inline / lightbox), delete.
   * **PDFs** — upload, view (embedded PDF.js), delete.
-  * Organization: **folders** + per-item **tags** (notes, images, and PDFs all taggable).
+  * **Markdown files** — upload, view (rendered), delete.
+  * Organization: **folders** + per-item **tags** (notes, images, PDFs, and Markdown files all taggable).
 * **Who**: Multiple registered users; **strict per-user isolation** — one account can never see another's data.
 * **Auth**: **Passkeys (WebAuthn) only** — no passwords. Browser verifies identity via fingerprint / FaceID / security key.
 * **Stack**: HTML + JS + CSS (no framework, no build step) · Golang · SQLite · local file system.
@@ -21,7 +22,7 @@ A self-hosted web app for storing personal notes and documents.
 ┌──────────────────────────────────────────────────────────┐
 │ Browser (vanilla HTML/JS/CSS, ES modules, no build step) │
 │  · Markdown editor + renderer (marked + DOMPurify)       │
-│  · PDF viewer (PDF.js)        · Image viewer             │
+│  · PDF viewer (PDF.js)  · Image viewer · Markdown viewer │
 │  · WebAuthn client (@simplewebauthn/browser)             │
 └──────────────┬───────────────────────────────────────────┘
                │ HTTPS (Let's Encrypt, auto)
@@ -36,13 +37,13 @@ A self-hosted web app for storing personal notes and documents.
 │  · serves embedded static assets (go:embed)              │
 │  · /api/auth/*   WebAuthn registration/login, sessions   │
 │  · /api/notes/*  markdown CRUD                           │
-│  · /api/files/*  image/PDF upload, serve, delete         │
+│  · /api/files/*  image/PDF/Markdown CRUD                 │
 │                                                          │
 │  ┌───────────────┐      ┌─────────────────────────────┐  │
 │  │ SQLite (WAL)  │      │ File system (DATA_DIR)      │  │
 │  │  users        │      │  data/notes/{uid}/{id}.md   │  │
 │  │  passkeys     │      │  data/files/{uid}/{id}.bin  │  │
-│  │  sessions     │      │   (images & PDFs)           │  │
+│  │  sessions     │      │  (images, PDFs & Markdown)  │  │
 │  │  notes/files  │      │  data/carseph.db            │  │
 │  │  metadata     │      │  data/carseph.db-wal/-shm   │  │
 │  └───────────────┘      └─────────────────────────────┘  │
@@ -124,11 +125,11 @@ CREATE TABLE notes (                       -- Markdown notes
     -- body lives at DATA_DIR/notes/{user_id}/{id}.md (file system, per requirement)
 );
 
-CREATE TABLE files (                       -- images & PDFs
+CREATE TABLE files (                       -- images, PDFs & Markdown
     id            TEXT PRIMARY KEY,
     user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     folder_id     TEXT REFERENCES folders(id) ON DELETE SET NULL,
-    kind          TEXT NOT NULL CHECK (kind IN ('image','pdf')),
+    kind          TEXT NOT NULL CHECK (kind IN ('image','pdf','markdown')),
     original_name TEXT NOT NULL,
     mime          TEXT NOT NULL,
     size          INTEGER NOT NULL,
@@ -198,11 +199,11 @@ WebAuthn settings: `residentKey: required`, `userVerification: "required"` (regi
 | `PUT /api/notes/{id}` | update title, body, folder_id, tags |
 | `DELETE /api/notes/{id}` | delete |
 
-### Files (images & PDFs)
+### Files (images, PDFs & Markdown)
 
 | Method & path | Purpose |
 |---|---|
-| `GET /api/files?kind=image|pdf` | list metadata; same `folder`/`tag`/`q` filters as notes |
+| `GET /api/files?kind=image|pdf|markdown` | list metadata; same `folder`/`tag`/`q` filters as notes |
 | `POST /api/files` | multipart upload; one file; validated (see §5) |
 | `GET /api/files/{id}/raw` | stream blob — `http.ServeContent` (Range/ETag; PDF.js benefits) |
 | | `Content-Type` = stored/sanitized type, `inline` by default, `attachment` with `?download=1` |
@@ -231,7 +232,11 @@ Tag rows left orphaned by item deletion are pruned in the same transaction. Fold
 ## 5. Upload & content validation
 
 * Size limits: Markdown body 1 MB; uploads 25 MB (configurable).
-* Allowed upload types: `image/png|jpeg|gif|webp|avif` and `application/pdf`. **No SVG** in v1 (text-based, can carry scripts; sanitized-embedding complexity not worth it).
+* Allowed upload types: `image/png|jpeg|gif|webp|avif`, `application/pdf`, and
+  `text/plain` **only when the filename ends in `.md`/`.markdown`** (Markdown has
+  no magic bytes, so the extension is the gate; `http.DetectContentType` already
+  proves the bytes are text). **No SVG** in v1 (text-based, can carry scripts;
+  sanitized-embedding complexity not worth it).
 * On disk, blobs are written to temp then renamed; filename is `{id}.{ext}` — **no user-controlled path components anywhere** (IDs are server-generated), which structurally eliminates path traversal.
 * `sha256` stored for integrity/dedupe-safety checks.
 
@@ -268,7 +273,7 @@ Pages (vanilla JS ES modules, `web/static/`):
 |---|---|
 | `/login` | username + invite code fields → **Sign in / Create account** buttons driving the two WebAuthn ceremonies; passkey management lives on the main app for authenticated users |
 | `/` | Sidebar: folder list (with counts) + tag chips filter + title search; main pane: notes list (sort by updated) and **view** (rendered) ⇄ **edit** (textarea + toolbar, autosave draft to `localStorage`, explicit Save) with live split preview; New / Delete buttons |
-| `/files` | Same sidebar (folders/tags); grid gallery for images (thumbnail = same `/raw` URL, lazy-loaded); list rows for PDFs with a viewer pane (PDF.js) or dedicated modal; per-item: move-to-folder, tag editor, copy-Markdown-snippet (images), Delete |
+| `/files` | Same sidebar (folders/tags); grid gallery for images (thumbnail = same `/raw` URL, lazy-loaded); list rows for PDFs and Markdown files with a viewer pane (PDF.js / rendered Markdown) or dedicated modal; per-item: move-to-folder, tag editor, copy-Markdown-snippet (images), Delete |
 | `/settings` | rename/delete passkeys, add passkey, sign out, (storage usage) |
 
 Rendering pipeline: `marked.parse(md)` → `DOMPurify.sanitize()` → inject; link handling: relative links resolved against `/api/files/...` suggestions; images in markdown reference uploaded files via `![](/api/files/{id}/raw)` — each gallery item has a **copy Markdown snippet** button (confirmed decision #6).

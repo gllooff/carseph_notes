@@ -6,12 +6,12 @@ import (
 	"errors"
 )
 
-// File is an uploaded image or PDF (metadata; blob lives on disk).
+// File is an uploaded image, PDF or Markdown file (metadata; blob lives on disk).
 type File struct {
 	ID           string
 	UserID       string
 	FolderID     sql.NullString
-	Kind         string // "image" | "pdf"
+	Kind         string // "image" | "pdf" | "markdown"
 	OriginalName string
 	Mime         string
 	Size         int64
@@ -24,7 +24,7 @@ type File struct {
 
 // FileFilter narrows file lists.
 type FileFilter struct {
-	Kind     string // "" both, "image", "pdf"
+	Kind     string // "" both, "image", "pdf", "markdown"
 	FolderID string
 	Tag      string
 	Q        string // original-name substring
