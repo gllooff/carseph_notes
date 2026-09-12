@@ -5,5 +5,15 @@
 # DNS-only (grey cloud) so the HTTP-01 challenge can be solved.
 
 notes.jys-reality.win {
+	rate_limit {
+		zone notes_auth {
+			match {
+				path /api/auth/*
+			}
+			key {remote_host}
+			events 60
+			window 1m
+		}
+	}
 	reverse_proxy 127.0.0.1:8084
 }
