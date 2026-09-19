@@ -735,7 +735,7 @@ document.getElementById('search').addEventListener('input', (e) => {
   refreshNotes().catch(showError);
 });
 document.getElementById('folder-form').addEventListener('submit', createFolder);
-document.addEventListener('files-changed', () => { refreshNotes().catch(showError); });
+document.addEventListener('files-changed', () => { loadNotesView().catch(showError); });
 
 function redirectLogin() { location.href = '/login'; }
 
